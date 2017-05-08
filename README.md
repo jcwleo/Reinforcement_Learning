@@ -1,10 +1,9 @@
 # Reinforcement Learning
 ###### OpenAI 환경에 적용해보는 강화학습 예제
-----------------
-![Alt text](/readme/Play.gif)
-(Breakout / Use DQN(Nature2015)
----------------
 
+![Alt text](/readme/Play.gif)
+###### (Breakout / Use DQN(Nature2015))
+---------------
 ## 1. Q-Table
 * FrozenLake(Gridword)
 	* [Deterministic](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-Table.py)
