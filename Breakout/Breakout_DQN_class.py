@@ -284,7 +284,6 @@ def main():
                                     src_scope_name="main")
         sess.run(copy_ops)
 
-        rlist = [0]
         recent_rlist = deque(maxlen=100)
         e = 1.
         episode, epoch, frame = 0, 0, 0
@@ -371,7 +370,7 @@ def main():
                     epoch_on = True
 
             recent_rlist.append(rall)
-            rlist.append(rall)
+
             average_reward.append(rall)
 
             print("Episode:{0:6d} | Frames:{1:9d} | Steps:{2:5d} | Reward:{3:3.0f} | e-greedy:{4:.5f} | "
