@@ -18,8 +18,8 @@ from skimage.color import rgb2gray
 plt.ion()
 # DQN paper setting(frameskip = 4, repeat_action_probability = 0)
 # {}Deterministic : frameskip = 4
-# {}-v3 : repeat_action_probability
-env = gym.make('BreakoutDeterministic-v3')
+# {}-v4 : repeat_action_probability
+env = gym.make('BreakoutDeterministic-v4')
 
 # 하이퍼 파라미터
 MINIBATCH_SIZE = 32
@@ -31,7 +31,7 @@ MEMORY_SIZE = 400000
 EXPLORATION = 1000000
 START_EXPLORATION = 1.
 INPUT = env.observation_space.shape
-OUTPUT = 3
+OUTPUT = env.observation_space.n
 HEIGHT = 84
 WIDTH = 84
 LEARNING_RATE = 0.00025
@@ -326,15 +326,17 @@ def main():
                 action = mainDQN.get_action(Q, e)
 
                 # 액션 개수 줄임(for Breakout)
+                '''
                 if action == 0:
                     real_a = 1
                 elif action == 1:
                     real_a = 4
                 else:
                     real_a = 5
+                '''
 
                 # s1 : next frame / r : reward / d : done(terminal) / l : info(lives)
-                s1, r, d, l = env.step(real_a)
+                s1, r, d, l = env.step(action)
                 ter = d
                 reward = np.clip(r, -1, 1)
 
