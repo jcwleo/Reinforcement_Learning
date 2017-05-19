@@ -248,7 +248,7 @@ def main():
                 y[action] = 1
 
                 s1, reward, done, l = env.step(action)
-                
+
                 ter = done
                 rall += reward
                 reward = np.clip(reward, -1, 1)
@@ -273,7 +273,8 @@ def main():
 
                     discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]))
 
-                    l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), np.vstack(episode_memory[:, 1]),
+                    l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), np.stack(episode_memory[:, 1],
+                                                                                                axis =0),
                                        discounted_rewards)
 
             recent_rlist.append(rall)
