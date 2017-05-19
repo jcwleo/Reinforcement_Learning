@@ -61,8 +61,8 @@ def play_cartpole(PGagent):
         episode += 1
         while not done:
             env.render()
-            action = PGagent.get_action(s)
-            s1, reward, done, _ = env.step(action)
+            action_p = PGagent.sess.run(PGagent.a_pre, feed_dict={PGagent.X : s})
+            s1, reward, done, _ = env.step(np.argmax(action_p))
             s = s1
             rall += reward
         print("[Episode {0:6f}] Reward: {1:4f} ".format(episode, rall))
@@ -134,7 +134,7 @@ def main():
 
                 # 에피소드가 끝났을때 학습
                 if done:
-                    eisode_memory = np.array(episode_memory)
+                    episode_memory = np.array(episode_memory)
 
                     discounted_rewards = discount_rewards(np.vstack(episode_memory[:,2]))
 
