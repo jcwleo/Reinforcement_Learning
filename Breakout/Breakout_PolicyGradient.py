@@ -7,12 +7,12 @@ from skimage.transform import resize
 from skimage.color import rgb2gray
 import copy
 
-env = gym.make('BreakoutDeterministic-v3')
+env = gym.make('BreakoutDeterministic-v4')
 
 # 하이퍼 파라미터
 LEARNING_RATE = 0.001
 INPUT = env.observation_space.shape
-OUTPUT = 3
+OUTPUT = env.action_space.n
 DISCOUNT = 0.99
 HEIGHT = 84
 WIDTH = 84
@@ -247,15 +247,8 @@ def main():
                 y = np.zeros(OUTPUT)
                 y[action] = 1
 
-                if action == 0:
-                    real_a = 1
-                elif action == 1:
-                    real_a = 4
-                else:
-                    real_a = 5
-
-                # 액션수 줄임
-                s1, reward, done, l = env.step(real_a)
+                s1, reward, done, l = env.step(action)
+                
                 ter = done
                 rall += reward
                 reward = np.clip(reward, -1, 1)
