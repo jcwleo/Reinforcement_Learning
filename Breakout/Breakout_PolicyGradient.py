@@ -103,7 +103,7 @@ def get_terminal(start_live, l, reward, no_life_game, ter):
 
     return [ter, start_live]
 
-def discount_rewards(r, ter):
+def discount_rewards(r):
     '''Discounted reward를 구하기 위한 함수
 
     Args:
@@ -115,7 +115,7 @@ def discount_rewards(r, ter):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
-        if ter[t] == True:
+        if r[t] < 0:
             # reward를 받았을 때, discounted reward를 초기화 해줌
             running_add = 0
         running_add = running_add * DISCOUNT + r[t]
@@ -188,8 +188,8 @@ class PolicyGradient:
         f1 = tf.get_variable("f1", shape=[8, 8, 4, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
         f2 = tf.get_variable("f2", shape=[4, 4, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
         f3 = tf.get_variable("f3", shape=[3, 3, 64, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-        w1 = tf.get_variable("w1", shape=[7 * 7 * 64, 128], initializer=tf.contrib.layers.xavier_initializer())
-        w2 = tf.get_variable("w2", shape=[128, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
+        w1 = tf.get_variable("w1", shape=[7 * 7 * 64, 512], initializer=tf.contrib.layers.xavier_initializer())
+        w2 = tf.get_variable("w2", shape=[512, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
 
         c1 = tf.nn.relu(tf.nn.conv2d(self.X, f1, strides=[1, 4, 4, 1], padding="VALID"))
         c2 = tf.nn.relu(tf.nn.conv2d(c1, f2, strides=[1, 2, 2, 1], padding="VALID"))
@@ -207,7 +207,7 @@ class PolicyGradient:
         self.saver = tf.train.Saver()
 
     def get_action(self, state):
-        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),[-1,84,84,4])})
+        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),[1,84,84,4])})
         # 각 액션의 확률로 액션을 결정
         action = np.random.choice(np.arange(self.output_size), p=action_p[0])
 
@@ -259,10 +259,10 @@ def main():
                 ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
                 # 목숨이 줄어 들었을때 -1 리워드를 줌(for Breakout)
-                # if ter:
-                #     reward = -1
+                if ter:
+                    reward = -1
 
-                episode_memory.append([np.copy(history), y, reward, ter])
+                episode_memory.append([np.copy(history), y, reward])
 
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history = np.append(history[:,:,1:],np.reshape(pre_proc(s1),[84,84,1]), axis=2)
@@ -271,16 +271,15 @@ def main():
                 if done:
                     episode_memory = np.array(episode_memory)
 
-                    discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]), np.vstack(episode_memory[:, 3]))
+                    discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]))
 
-                    l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), np.stack(episode_memory[:, 1],
-                                                                                                axis =0),
-                                       discounted_rewards)
+                    l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), 
+                                       np.stack(episode_memory[:, 1], axis =0), discounted_rewards)
 
             recent_rlist.append(rall)
 
-            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} Recent Reward: {3:4f}".format(episode, rall, l,
-                                                                                                np.mean(recent_rlist), count))
+            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} Recent Reward: {3:4f}".
+                  format(episode, rall, l, np.mean(recent_rlist), count))
 
             if episode % 1000 == 0:
                 PGagent.saver.save(PGagent.sess, model_path, global_step= episode)
