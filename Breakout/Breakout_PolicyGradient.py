@@ -10,7 +10,7 @@ import copy
 env = gym.make('BreakoutDeterministic-v4')
 
 # 하이퍼 파라미터
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 INPUT = env.observation_space.shape
 OUTPUT = env.action_space.n
 DISCOUNT = 0.99
@@ -103,7 +103,7 @@ def get_terminal(start_live, l, reward, no_life_game, ter):
 
     return [ter, start_live]
 
-def discount_rewards(r):
+def discount_rewards(r, ter):
     '''Discounted reward를 구하기 위한 함수
 
     Args:
@@ -115,7 +115,7 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
-        if r[t] != 0:
+        if ter[t] == True:
             # reward를 받았을 때, discounted reward를 초기화 해줌
             running_add = 0
         running_add = running_add * DISCOUNT + r[t]
@@ -138,7 +138,7 @@ def train_episodic(PGagent, x, y, adv):
         l(float): 네트워크에 의한 loss
     '''
 
-    l, _ = PGagent.sess.run([PGagent.loss, PGagent.train], feed_dict={PGagent.X: x,
+    l, _ = PGagent.sess.run([PGagent.loss, PGagent.train], feed_dict={PGagent.X: np.float32(x/255.),
                                                                       PGagent.Y: y,
                                                                       PGagent.adv: adv})
     return l
@@ -259,10 +259,10 @@ def main():
                 ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
                 # 목숨이 줄어 들었을때 -1 리워드를 줌(for Breakout)
-                if ter:
-                    reward = -1
+                # if ter:
+                #     reward = -1
 
-                episode_memory.append([np.copy(history), y, reward])
+                episode_memory.append([np.copy(history), y, reward, ter])
 
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history = np.append(history[:,:,1:],np.reshape(pre_proc(s1),[84,84,1]), axis=2)
@@ -271,7 +271,7 @@ def main():
                 if done:
                     episode_memory = np.array(episode_memory)
 
-                    discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]))
+                    discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]), np.vstack(episode_memory[:, 3]))
 
                     l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), np.stack(episode_memory[:, 1],
                                                                                                 axis =0),
