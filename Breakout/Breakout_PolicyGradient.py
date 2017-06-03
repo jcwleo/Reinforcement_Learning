@@ -7,12 +7,12 @@ from skimage.transform import resize
 from skimage.color import rgb2gray
 import copy
 
-env = gym.make('BreakoutDeterministic-v4')
+env = gym.make('PongDeterministic-v3')
 
 # 하이퍼 파라미터
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.001
 INPUT = env.observation_space.shape
-OUTPUT = env.action_space.n
+OUTPUT = 3
 DISCOUNT = 0.99
 HEIGHT = 84
 WIDTH = 84
@@ -21,7 +21,7 @@ EPSILON =0.01
 MOMENTUM = 0.95
 BATCH_SIZE = 256
 
-model_path = 'save/breakout-pg.ckpt'
+model_path = 'save/pong-pg.ckpt'
 def pre_proc(X):
     '''입력데이터 전처리.
 
@@ -115,11 +115,9 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
-        if r[t] < 0:
-            # reward를 받았을 때, discounted reward를 초기화 해줌
-            running_add = 0
         running_add = running_add * DISCOUNT + r[t]
         discounted_r[t] = running_add
+
     discounted_r = (discounted_r - discounted_r.mean()) / (discounted_r.std())
 
     return discounted_r
@@ -199,22 +197,27 @@ class PolicyGradient:
         l2 = tf.nn.relu(tf.matmul(l1, w1))
         self.a_pre = tf.nn.softmax(tf.matmul(l2, w2))
 
-        self.log_p = self.Y * tf.log(tf.clip_by_value(self.a_pre, 1e-10, 1.0))
-        self.log_lik = self.log_p * self.adv
-        self.loss = tf.reduce_mean(tf.reduce_sum(-self.log_lik, axis=1))
+        #self.pre = tf.matmul(l2,w2)
+        #self.adv_Y = self.adv * (self.Y - self.a_pre) * LEARNING_RATE + self.a_pre
+        #self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = self.pre, labels=self.adv_Y))
+
+        self.log_p = tf.log(tf.clip_by_value(tf.reduce_sum(self.a_pre * self.Y, axis=1), 1e-10, 1.))
+        self.log_lik = -self.log_p * self.adv
+        self.loss = tf.reduce_mean(self.log_lik)
         self.train = tf.train.AdamOptimizer(LEARNING_RATE).minimize(self.loss)
 
         self.saver = tf.train.Saver()
 
-    def get_action(self, state):
-        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),[1,84,84,4])})
+    def get_action(self, state, max_prob):
+        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),[-1,84,84,4])})
         # 각 액션의 확률로 액션을 결정
+        max_prob.append(np.max(action_p))
         action = np.random.choice(np.arange(self.output_size), p=action_p[0])
 
         return action
 
 def main():
-    with tf.Session() as sess:
+    with tf.Session(config = tf.ConfigProto(device_count ={'GPU' : 0})) as sess:
         PGagent = PolicyGradient(sess, INPUT, OUTPUT)
 
         sess.run(tf.global_variables_initializer())
@@ -227,27 +230,37 @@ def main():
         while np.mean(recent_rlist) <= 195:
             episode += 1
 
-            episode_memory = deque()
+            state_memory = deque()
+            action_memory = deque()
+            reward_memory = deque()
+            rewards = np.empty(0).reshape(0, 1)
             history = np.zeros([84, 84, 4], dtype=np.uint8)
             rall, count = 0, 0
             done = False
             ter = False
             start_lives = 0
             s = env.reset()
-
+            max_prob = deque()
             get_init_state(history, s)
 
             while not done:
                 # env.render()
                 count += 1
                 # 액션 선택
-                action = PGagent.get_action(history)
+                action = PGagent.get_action(history, max_prob)
 
                 # action을 one_hot으로 표현
                 y = np.zeros(OUTPUT)
                 y[action] = 1
 
-                s1, reward, done, l = env.step(action)
+                if action == 0:
+                    real_a = 1
+                elif action == 1:
+                    real_a = 4
+                else:
+                    real_a = 5
+
+                s1, reward, done, l = env.step(action + 1)
 
                 ter = done
                 rall += reward
@@ -259,29 +272,34 @@ def main():
                 ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
                 # 목숨이 줄어 들었을때 -1 리워드를 줌(for Breakout)
-                if ter:
-                    reward = -1
+                # if ter:
+                #     reward = -1
 
-                episode_memory.append([np.copy(history), y, reward])
+                state_memory.append(np.copy(history))
+                action_memory.append(y)
+                reward_memory.append(reward)
+
+                if reward != 0:
+                    ep_reward = np.vstack(reward_memory)
+                    discounted_rewards = discount_rewards(ep_reward)
+                    rewards = np.vstack([rewards, discounted_rewards])
+                    reward_memory = deque()
 
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history = np.append(history[:,:,1:],np.reshape(pre_proc(s1),[84,84,1]), axis=2)
 
                 # 에피소드가 끝났을때 학습
                 if done:
-                    episode_memory = np.array(episode_memory)
-
-                    discounted_rewards = discount_rewards(np.vstack(episode_memory[:, 2]))
-
-                    l = train_episodic(PGagent, np.stack(episode_memory[:,0], axis=0), 
-                                       np.stack(episode_memory[:, 1], axis =0), discounted_rewards)
+                    # print(np.stack(state_memory, axis=0).shape, np.stack(action_memory, axis =0).shape, rewards.shape)
+                    l = train_episodic(PGagent, np.stack(state_memory, axis=0),
+                                       np.stack(action_memory, axis =0), rewards)
 
             recent_rlist.append(rall)
 
-            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} Recent Reward: {3:4f}".
-                  format(episode, rall, l, np.mean(recent_rlist), count))
+            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} X e-5 Recent Reward: {3:4f} Max Prob: {5:5.5f}".
+                  format(episode, rall, l*(1e+5), np.mean(recent_rlist), count, np.mean(max_prob)))
 
-            if episode % 1000 == 0:
+            if episode % 10 == 0:
                 PGagent.saver.save(PGagent.sess, model_path, global_step= episode)
         play_atari(PGagent)
 
