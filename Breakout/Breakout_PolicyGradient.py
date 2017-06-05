@@ -289,11 +289,10 @@ def main():
                     discounted_rewards = discount_rewards(ep_reward)
                     rewards = np.vstack([rewards, discounted_rewards])
                     reward_memory = deque()
-
+                '''
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history[:, :, 4] = pre_proc(s1)
                 history[:, :, :4] = history[:, :, 1:]
-                '''
 
                 # 에피소드가 끝났을때 학습
                 if done:
