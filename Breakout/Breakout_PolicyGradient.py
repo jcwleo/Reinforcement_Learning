@@ -13,6 +13,7 @@ env = gym.make('PongDeterministic-v3')
 LEARNING_RATE = 0.001
 INPUT = env.observation_space.shape
 OUTPUT = 3
+print(OUTPUT)
 DISCOUNT = 0.99
 HEIGHT = 84
 WIDTH = 84
@@ -115,10 +116,13 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
+        #if r[t] != 0:
+        #    running_add = 0
         running_add = running_add * DISCOUNT + r[t]
         discounted_r[t] = running_add
 
-    discounted_r = (discounted_r - discounted_r.mean()) / (discounted_r.std())
+    discounted_r = discounted_r - discounted_r.mean()
+    discounted_r = discounted_r / discounted_r.std()
 
     return discounted_r
 
@@ -136,7 +140,7 @@ def train_episodic(PGagent, x, y, adv):
         l(float): 네트워크에 의한 loss
     '''
 
-    l, _ = PGagent.sess.run([PGagent.loss, PGagent.train], feed_dict={PGagent.X: np.float32(x/255.),
+    l, _ = PGagent.sess.run([PGagent.loss, PGagent.train], feed_dict={PGagent.X: x,
                                                                       PGagent.Y: y,
                                                                       PGagent.adv: adv})
     return l
@@ -215,12 +219,13 @@ class PolicyGradient:
         action = np.random.choice(np.arange(self.output_size), p=action_p[0])
 
         return action
-
+# config = tf.ConfigProto(device_count ={'GPU' : 0})
 def main():
     with tf.Session(config = tf.ConfigProto(device_count ={'GPU' : 0})) as sess:
         PGagent = PolicyGradient(sess, INPUT, OUTPUT)
 
-        sess.run(tf.global_variables_initializer())
+        PGagent.sess.run(tf.global_variables_initializer())
+
         episode = 0
         recent_rlist = deque(maxlen=100)
         recent_rlist.append(0)
@@ -234,7 +239,7 @@ def main():
             action_memory = deque()
             reward_memory = deque()
             rewards = np.empty(0).reshape(0, 1)
-            history = np.zeros([84, 84, 4], dtype=np.uint8)
+            history = np.zeros([84, 84, 5], dtype=np.uint8)
             rall, count = 0, 0
             done = False
             ter = False
@@ -244,10 +249,10 @@ def main():
             get_init_state(history, s)
 
             while not done:
-                # env.render()
+                #env.render()
                 count += 1
                 # 액션 선택
-                action = PGagent.get_action(history, max_prob)
+                action = PGagent.get_action(history[:,:,:4], max_prob)
 
                 # action을 one_hot으로 표현
                 y = np.zeros(OUTPUT)
@@ -272,10 +277,10 @@ def main():
                 ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
                 # 목숨이 줄어 들었을때 -1 리워드를 줌(for Breakout)
-                # if ter:
-                #     reward = -1
+                #if ter:
+                #    reward = -1
 
-                state_memory.append(np.copy(history))
+                state_memory.append(np.copy(np.float32(history[:,:,:4]/255.)))
                 action_memory.append(y)
                 reward_memory.append(reward)
 
@@ -286,18 +291,20 @@ def main():
                     reward_memory = deque()
 
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
-                history = np.append(history[:,:,1:],np.reshape(pre_proc(s1),[84,84,1]), axis=2)
+                history[:, :, 4] = pre_proc(s1)
+                history[:, :, :4] = history[:, :, 1:]
 
                 # 에피소드가 끝났을때 학습
                 if done:
-                    # print(np.stack(state_memory, axis=0).shape, np.stack(action_memory, axis =0).shape, rewards.shape)
+                    #rewards = discount_rewards(np.vstack(reward_memory))
+                    # print(np.stack(state_memory, axis =0).shape, np.stack(action_memory, axis =0).shape, np.reshape(rewards, [-1,1]).shape)
                     l = train_episodic(PGagent, np.stack(state_memory, axis=0),
                                        np.stack(action_memory, axis =0), rewards)
 
             recent_rlist.append(rall)
 
-            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} X e-5 Recent Reward: {3:4f} Max Prob: {5:5.5f}".
-                  format(episode, rall, l*(1e+5), np.mean(recent_rlist), count, np.mean(max_prob)))
+            print("[Episode {0:6d}] Step:{4:6d} Reward: {1:4f} Loss: {2:5.5f} Recent Reward: {3:4f} Max Prob: {5:5.5f}".
+                  format(episode, rall, l, np.mean(recent_rlist), count, np.mean(max_prob)))
 
             if episode % 10 == 0:
                 PGagent.saver.save(PGagent.sess, model_path, global_step= episode)
