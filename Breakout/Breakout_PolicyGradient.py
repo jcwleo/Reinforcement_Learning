@@ -116,8 +116,8 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
-        #if r[t] != 0:
-        #    running_add = 0
+        if r[t] != 0:
+            running_add = 0
         running_add = running_add * DISCOUNT + r[t]
         discounted_r[t] = running_add
 
@@ -205,7 +205,7 @@ class PolicyGradient:
         #self.adv_Y = self.adv * (self.Y - self.a_pre) * LEARNING_RATE + self.a_pre
         #self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = self.pre, labels=self.adv_Y))
 
-        self.log_p = tf.log(tf.clip_by_value(tf.reduce_sum(self.a_pre * self.Y, axis=1), 1e-10, 1.))
+        self.log_p = tf.log(tf.reduce_sum(self.a_pre * self.Y, axis=1))
         self.log_lik = -self.log_p * self.adv
         self.loss = tf.reduce_mean(self.log_lik)
         self.train = tf.train.AdamOptimizer(LEARNING_RATE).minimize(self.loss)
@@ -281,9 +281,9 @@ def main():
                 #    reward = -1
 
                 state_memory.append(np.copy(np.float32(history[:,:,:4]/255.)))
-                action_memory.append(y)
-                reward_memory.append(reward)
-
+                action_memory.append(np.copy(y))
+                reward_memory.append(np.copy(reward))
+                '''
                 if reward != 0:
                     ep_reward = np.vstack(reward_memory)
                     discounted_rewards = discount_rewards(ep_reward)
@@ -293,10 +293,11 @@ def main():
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history[:, :, 4] = pre_proc(s1)
                 history[:, :, :4] = history[:, :, 1:]
+                '''
 
                 # 에피소드가 끝났을때 학습
                 if done:
-                    #rewards = discount_rewards(np.vstack(reward_memory))
+                    rewards = discount_rewards(np.vstack(reward_memory))
                     # print(np.stack(state_memory, axis =0).shape, np.stack(action_memory, axis =0).shape, np.reshape(rewards, [-1,1]).shape)
                     l = train_episodic(PGagent, np.stack(state_memory, axis=0),
                                        np.stack(action_memory, axis =0), rewards)
