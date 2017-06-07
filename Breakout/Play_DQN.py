@@ -31,7 +31,7 @@ MEMORY_SIZE = 400000
 EXPLORATION = 1000000
 START_EXPLORATION = 1.
 INPUT = env.observation_space.shape
-OUTPUT = env.observation_space.n
+OUTPUT = env.action_space.n
 HEIGHT = 84
 WIDTH = 84
 LEARNING_RATE = 0.00025
@@ -307,9 +307,8 @@ def main():
                 frame += 1
                 count += 1
 
-                # e-greedy
-                if e > FINAL_EXPLORATION and frame > TRAIN_START:
-                    e -= (START_EXPLORATION - FINAL_EXPLORATION) / EXPLORATION
+                # e-greedy(for test)
+                e = 0.05
 
                 # 히스토리의 0~4까지 부분으로 Q값 예측
                 Q = mainDQN.get_q(history[:, :, :4])

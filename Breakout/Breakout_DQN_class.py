@@ -31,7 +31,7 @@ MEMORY_SIZE = 400000
 EXPLORATION = 1000000
 START_EXPLORATION = 1.
 INPUT = env.observation_space.shape
-OUTPUT = env.observation_space.n
+OUTPUT = env.action_space.n
 HEIGHT = 84
 WIDTH = 84
 LEARNING_RATE = 0.00025
@@ -41,24 +41,26 @@ MOMENTUM = 0.95
 
 model_path = "save/Breakout.ckpt"
 
+
 def cliped_error(error):
     '''후버로스를 사용하여 error 클립.
-    
+
     Args:
         error(tensor): 클립을 해야할 tensor
-        
+
     Returns:
         tensor: -1 ~ 1 사이로 클립된 error
     '''
     return tf.where(tf.abs(error) < 1.0, 0.5 * tf.square(error), tf.abs(error) - 0.5)
 
+
 def pre_proc(X):
     '''입력데이터 전처리.
-    
+
     Args:
         X(np.array): 받아온 이미지를 그레이 스케일링 후 84X84로 크기변경
             그리고 정수값으로 저장하기위해(메모리 효율 높이기 위해) 255를 곱함
-        
+
     Returns:
         np.array: 변경된 이미지
     '''
@@ -71,11 +73,11 @@ def pre_proc(X):
 
 def get_copy_var_ops(*, dest_scope_name="target", src_scope_name="main"):
     '''타겟네트워크에 메인네트워크의 Weight값을 복사.
-    
+
     Args:
         dest_scope_name="target"(DQN): 'target'이라는 이름을 가진 객체를 가져옴
         src_scope_name="main"(DQN): 'main'이라는 이름을 가진 객체를 가져옴
-        
+
     Returns:
         list: main의 trainable한 값들이 target의 값으로 복사된 값
     '''
@@ -91,28 +93,30 @@ def get_copy_var_ops(*, dest_scope_name="target", src_scope_name="main"):
 
     return op_holder
 
+
 def get_init_state(history, s):
     '''에피소드 시작 State를 초기화.
-    
+
     Args:
         history(np.array): 5개의 프레임이 저장될 array
         s(list): 초기화된 이미지
-        
+
     Note:
         history[:,:,:3]에 모두 초기화된 이미지(s)를 넣어줌
     '''
     for i in range(HISTORY_SIZE):
         history[:, :, i] = pre_proc(s)
 
+
 def get_game_type(count, l, no_life_game, start_live):
     '''라이프가 있는 게임인지 판별
-    
+
     Args:
         count(int): 에피소드 시작 후 첫 프레임인지 확인하기 위한 arg
         l(dict): 라이프 값들이 저장되어있는 dict ex) l['ale.lives']
         no_life_game(bool): 라이프가 있는 게임일 경우, bool 값을 반환해주기 위한 arg
         start_live(int): 라이프가 있는 경우 라이프값을 초기화 하기 위한 arg
-    
+
     Returns:
         list:
             no_life_game(bool): 라이프가 없는 게임이면 True, 있으면 False
@@ -127,15 +131,16 @@ def get_game_type(count, l, no_life_game, start_live):
             no_life_game = False
     return [no_life_game, start_live]
 
+
 def get_terminal(start_live, l, reward, no_life_game, ter):
     '''목숨이 줄어들거나, negative reward를 받았을 때, terminal 처리
-    
+
     Args:
         start_live(int): 라이프가 있는 게임일 경우, 현재 라이프 수
         l(dict): 다음 상태에서 라이프가 줄었는지 확인하기 위한 다음 frame의 라이프 info
         no_life_game(bool): 라이프가 없는 게임일 경우, negative reward를 받으면 terminal 처리를 해주기 위한 게임 타입
         ter(bool): terminal 처리를 저장할 arg
-        
+
     Returns:
         list:
             ter(bool): terminal 상태
@@ -153,14 +158,15 @@ def get_terminal(start_live, l, reward, no_life_game, ter):
 
     return [ter, start_live]
 
+
 def train_minibatch(mainDQN, targetDQN, minibatch):
     '''미니배치로 가져온 sample데이터로 메인네트워크 학습
-    
+
     Args:
         mainDQN(object): 메인 네트워크
         targetDQN(object): 타겟 네트워크
         minibatch: replay_memory에서 MINIBATCH 개수만큼 랜덤 sampling 해온 값
-        
+
     Note:
         replay_memory에서 꺼내온 값으로 메인 네트워크를 학습
     '''
@@ -325,16 +331,6 @@ def main():
                 # 액션 선택
                 action = mainDQN.get_action(Q, e)
 
-                # 액션 개수 줄임(for Breakout)
-                '''
-                if action == 0:
-                    real_a = 1
-                elif action == 1:
-                    real_a = 4
-                else:
-                    real_a = 5
-                '''
-
                 # s1 : next frame / r : reward / d : done(terminal) / l : info(lives)
                 s1, r, d, l = env.step(action)
                 ter = d
@@ -390,7 +386,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
