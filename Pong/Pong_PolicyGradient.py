@@ -5,9 +5,10 @@ import gym
 from collections import deque
 from skimage.transform import resize
 from skimage.color import rgb2gray
-import copy
 
-env = gym.make('PongDeterministic-v3')
+# {}Deterministic : frameskip = 4
+# {}-v4 : repeat_action_probability
+env = gym.make('PongDeterministic-v4')
 
 # 하이퍼 파라미터
 LEARNING_RATE = 0.00025
@@ -65,11 +66,14 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
+
         if r[t] != 0:
+            # 점수를 받으면 에피소드 내부의 작은 에피소드가 끝난 것으로 간주(for Pong)
             running_add = 0
         running_add = running_add * DISCOUNT + r[t]
         discounted_r[t] = running_add
 
+    # normalizing
     discounted_r = discounted_r - discounted_r.mean()
     discounted_r = discounted_r / discounted_r.std()
 
@@ -112,7 +116,7 @@ def play_atari(PGagent):
             env.render()
             action_p = PGagent.sess.run(
                 PGagent.a_pre,feed_dict={PGagent.X: np.reshape(np.float32(history[:,:,:4] / 255.), [-1, 84, 84, 4])})
-            s1, reward, done, _ = env.step(np.argmax(action_p))
+            s1, reward, done, _ = env.step(np.argmax(action_p)+2)
             history[:, :, 4] = pre_proc(s1)
             history[:, :, :4] = history[:, :, 1:]
             rall += reward
@@ -136,21 +140,25 @@ class PolicyGradient:
             self.Y = tf.placeholder('float', [None, self.output_size])
             self.adv = tf.placeholder('float')
 
+
             f1 = tf.get_variable("f1", shape=[1, 1, 4, 1], initializer=tf.contrib.layers.xavier_initializer_conv2d())
             f2 = tf.get_variable("f2", shape=[4, 4, 1, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
             f3 = tf.get_variable("f3", shape=[4, 4, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
             w1 = tf.get_variable("w1", shape=[6*6*64, 256], initializer=tf.contrib.layers.xavier_initializer())
             w2 = tf.get_variable("w2", shape=[256, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
 
+            # 1x1 conv layer
             c1 = tf.nn.relu(tf.nn.conv2d(self.X, f1, strides=[1, 1, 1, 1], padding="VALID"))
             c2 = tf.nn.relu(tf.nn.conv2d(c1, f2, strides=[1, 3, 3, 1], padding="VALID"))
             c3 = tf.nn.relu(tf.nn.conv2d(c2, f3, strides=[1, 4, 4, 1], padding="VALID"))
-            
+
             l1 = tf.reshape(c3, [-1, w1.get_shape().as_list()[0]])
             l2 = tf.nn.relu(tf.matmul(l1, w1))
             self.a_pre = tf.nn.softmax(tf.matmul(l2, w2))
 
+        # nan problem(log(0))
         self.log_p = tf.log(tf.clip_by_value(self.a_pre, 1e-10, 1.)) * self.Y
+
         self.log_lik = -self.log_p * self.adv
         self.loss = tf.reduce_mean(tf.reduce_sum(self.log_lik, axis=1))
         self.train = tf.train.AdamOptimizer(LEARNING_RATE).minimize(self.loss)
@@ -166,7 +174,9 @@ class PolicyGradient:
         return action
 # config = tf.ConfigProto(device_count ={'GPU' : 0})
 def main():
-    with tf.Session(config = tf.ConfigProto(device_count ={'GPU' : 0})) as sess:
+    with tf.Session() as sess:
+    # VRAM이 부족하면 CPU로 학습
+    # with tf.Session(config = tf.ConfigProto(device_count ={'GPU' : 0})) as sess:
         PGagent = PolicyGradient(sess, INPUT, OUTPUT)
 
         PGagent.sess.run(tf.global_variables_initializer())
@@ -176,14 +186,15 @@ def main():
         recent_rlist.append(0)
 
 
-        # 최근 100개의 점수가 195점 넘을 때까지 학습
-        while np.mean(recent_rlist) <= 195:
+        # 최근 100개의 점수가 19점 넘을 때까지 학습
+        while np.mean(recent_rlist) <= 19:
             episode += 1
 
             state_memory = deque()
             action_memory = deque()
             reward_memory = deque()
 
+            # 공의 움직임을 알아보기 위한 History
             history = np.zeros([84, 84, HISTORY_SIZE+1], dtype=np.uint8)
             rall, count = 0, 0
             done = False
@@ -202,11 +213,13 @@ def main():
                 y = np.zeros(OUTPUT)
                 y[action] = 1
 
+                # 학습속도 개선을 위해 액션의 개수를 2개로 줄임 (UP or DOWN)
                 s1, reward, done, l = env.step(action + 2)
 
                 rall += reward
                 reward = np.clip(reward, -1, 1)
 
+                # 한 에피소드를 저장
                 state_memory.append(np.copy(np.float32(history[:,:,:HISTORY_SIZE]/255.)))
                 action_memory.append(np.copy(y))
                 reward_memory.append(np.copy(reward))
@@ -217,6 +230,7 @@ def main():
 
                 # 에피소드가 끝났을때 학습
                 if done:
+                    # Discounted return을 구함
                     rewards = discount_rewards(np.vstack(reward_memory))
 
                     l = train_episodic(PGagent, np.stack(state_memory, axis=0),
