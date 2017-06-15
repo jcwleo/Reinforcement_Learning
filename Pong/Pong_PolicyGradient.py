@@ -140,11 +140,10 @@ class PolicyGradient:
             self.Y = tf.placeholder('float', [None, self.output_size])
             self.adv = tf.placeholder('float')
 
-
             f1 = tf.get_variable("f1", shape=[1, 1, 4, 1], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-            f2 = tf.get_variable("f2", shape=[4, 4, 1, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-            f3 = tf.get_variable("f3", shape=[4, 4, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-            w1 = tf.get_variable("w1", shape=[6*6*64, 256], initializer=tf.contrib.layers.xavier_initializer())
+            f2 = tf.get_variable("f2", shape=[4, 4, 1, 16], initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            f3 = tf.get_variable("f3", shape=[4, 4, 16, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            w1 = tf.get_variable("w1", shape=[6*6*32, 256], initializer=tf.contrib.layers.xavier_initializer())
             w2 = tf.get_variable("w2", shape=[256, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
 
             # 1x1 conv layer
@@ -185,7 +184,6 @@ def main():
         recent_rlist = deque(maxlen=100)
         recent_rlist.append(0)
 
-
         # 최근 100개의 점수가 19점 넘을 때까지 학습
         while np.mean(recent_rlist) <= 19:
             episode += 1
@@ -204,7 +202,7 @@ def main():
             get_init_state(history, s)
 
             while not done:
-                #env.render()
+                # env.render()
                 count += 1
                 # 액션 선택
                 action = PGagent.get_action(history[:,:,:HISTORY_SIZE], max_prob)
