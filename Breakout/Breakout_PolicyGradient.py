@@ -7,22 +7,19 @@ from skimage.transform import resize
 from skimage.color import rgb2gray
 import copy
 
-env = gym.make('PongDeterministic-v3')
+env = gym.make('Breakout-v3')
 
 # 하이퍼 파라미터
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.00025
 INPUT = env.observation_space.shape
 OUTPUT = 3
-print(OUTPUT)
 DISCOUNT = 0.99
 HEIGHT = 84
 WIDTH = 84
 HISTORY_SIZE = 4
-EPSILON =0.01
-MOMENTUM = 0.95
-BATCH_SIZE = 256
 
-model_path = 'save/pong-pg.ckpt'
+model_path = 'save/breakout-pg.ckpt'
+
 def pre_proc(X):
     '''입력데이터 전처리.
 
@@ -116,7 +113,7 @@ def discount_rewards(r):
     discounted_r = np.zeros_like(r, dtype=np.float32)
     running_add = 0
     for t in reversed(range(len(r))):
-        if r[t] != 0:
+        if r[t] < 0: # life가 줄었을때 마다 return 초기화
             running_add = 0
         running_add = running_add * DISCOUNT + r[t]
         discounted_r[t] = running_add
@@ -145,75 +142,47 @@ def train_episodic(PGagent, x, y, adv):
                                                                       PGagent.adv: adv})
     return l
 
-def play_atari(PGagent):
-    '''학습된 네트워크로 Play하기 위한 함수
-
-    Args:
-         PGagent(PolicyGradient): 학습된 네트워크
-    '''
-    print("Play Atari!")
-    episode = 0
-    while True:
-        s = env.reset()
-        history = np.zeros([84, 84, 5], dtype=np.uint8)
-        done = False
-        rall = 0
-        episode += 1
-        get_init_state(history, s)
-        while not done:
-            env.render()
-            action_p = PGagent.sess.run(PGagent.a_pre,
-                                        feed_dict={PGagent.X: np.reshape(np.float32(history[:,:,:4] / 255.), [-1, 84, 84, 4])})
-            s1, reward, done, _ = env.step(np.argmax(action_p))
-            history[:, :, 4] = pre_proc(s1)
-            history[:, :, :4] = history[:, :, 1:]
-            rall += reward
-        print("[Episode {0:6f}] Reward: {1:4f} ".format(episode, rall))
-
-
 class PolicyGradient:
-    def __init__(self, sess, input_size, output_size):
+    def __init__(self, sess, input_size, output_size , name = 'main'):
         self.sess = sess
         self.input_size = input_size
         self.output_size = output_size
         self.height = HEIGHT
         self.width = WIDTH
         self.history_size = HISTORY_SIZE
-
+        self.name = name
         self.build_network()
 
     def build_network(self):
-        self.X = tf.placeholder('float', [None, self.height, self.width, self.history_size])
-        self.Y = tf.placeholder('float', [None, self.output_size])
-        self.adv = tf.placeholder('float')
+        with tf.variable_scope(self.name):
+            self.X = tf.placeholder('float', [None, self.height, self.width, self.history_size])
+            self.Y = tf.placeholder('float', [None, self.output_size])
+            self.adv = tf.placeholder('float')
 
-        f1 = tf.get_variable("f1", shape=[8, 8, 4, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-        f2 = tf.get_variable("f2", shape=[4, 4, 32, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-        f3 = tf.get_variable("f3", shape=[3, 3, 64, 64], initializer=tf.contrib.layers.xavier_initializer_conv2d())
-        w1 = tf.get_variable("w1", shape=[7 * 7 * 64, 512], initializer=tf.contrib.layers.xavier_initializer())
-        w2 = tf.get_variable("w2", shape=[512, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
+            f1 = tf.get_variable("f1", shape=[1, 1, 4, 1], initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            f2 = tf.get_variable("f2", shape=[8, 8, 1, 16], initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            f3 = tf.get_variable("f3", shape=[4, 4, 16, 32], initializer=tf.contrib.layers.xavier_initializer_conv2d())
+            w1 = tf.get_variable("w1", shape=[9 * 9 * 32, 256], initializer=tf.contrib.layers.xavier_initializer())
+            w2 = tf.get_variable("w2", shape=[256, OUTPUT], initializer=tf.contrib.layers.xavier_initializer())
 
-        c1 = tf.nn.relu(tf.nn.conv2d(self.X, f1, strides=[1, 4, 4, 1], padding="VALID"))
-        c2 = tf.nn.relu(tf.nn.conv2d(c1, f2, strides=[1, 2, 2, 1], padding="VALID"))
-        c3 = tf.nn.relu(tf.nn.conv2d(c2, f3, strides=[1, 1, 1, 1], padding='VALID'))
+            # 1x1 conv layer
+            c1 = tf.nn.relu(tf.nn.conv2d(self.X, f1, strides=[1, 1, 1, 1], padding="VALID"))
+            c2 = tf.nn.relu(tf.nn.conv2d(c1, f2, strides=[1, 4, 4, 1], padding="VALID"))
+            c3 = tf.nn.relu(tf.nn.conv2d(c2, f3, strides=[1, 2, 2, 1], padding="VALID"))
 
-        l1 = tf.reshape(c3, [-1, w1.get_shape().as_list()[0]])
-        l2 = tf.nn.relu(tf.matmul(l1, w1))
-        self.a_pre = tf.nn.softmax(tf.matmul(l2, w2))
+            l1 = tf.reshape(c3, [-1, w1.get_shape().as_list()[0]])
+            l2 = tf.nn.relu(tf.matmul(l1, w1))
+            self.a_pre = tf.nn.softmax(tf.matmul(l2, w2))
 
-        #self.pre = tf.matmul(l2,w2)
-        #self.adv_Y = self.adv * (self.Y - self.a_pre) * LEARNING_RATE + self.a_pre
-        #self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = self.pre, labels=self.adv_Y))
-
-        self.log_p = tf.log(tf.reduce_sum(self.a_pre * self.Y, axis=1))
+        self.log_p = tf.log(tf.clip_by_value(self.a_pre, 1e-10, 1.)) * self.Y
         self.log_lik = -self.log_p * self.adv
-        self.loss = tf.reduce_mean(self.log_lik)
+        self.loss = tf.reduce_mean(tf.reduce_sum(self.log_lik, axis=1))
         self.train = tf.train.AdamOptimizer(LEARNING_RATE).minimize(self.loss)
-
         self.saver = tf.train.Saver()
 
     def get_action(self, state, max_prob):
-        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),[-1,84,84,4])})
+        action_p = self.sess.run(self.a_pre, feed_dict={self.X: np.reshape(np.float32(state/255.),
+                                                                           [-1,HEIGHT,WIDTH,HISTORY_SIZE])})
         # 각 액션의 확률로 액션을 결정
         max_prob.append(np.max(action_p))
         action = np.random.choice(np.arange(self.output_size), p=action_p[0])
@@ -221,7 +190,7 @@ class PolicyGradient:
         return action
 # config = tf.ConfigProto(device_count ={'GPU' : 0})
 def main():
-    with tf.Session(config = tf.ConfigProto(device_count ={'GPU' : 0})) as sess:
+    with tf.Session() as sess:
         PGagent = PolicyGradient(sess, INPUT, OUTPUT)
 
         PGagent.sess.run(tf.global_variables_initializer())
@@ -229,8 +198,8 @@ def main():
         episode = 0
         recent_rlist = deque(maxlen=100)
         recent_rlist.append(0)
-        no_life_game = False
 
+        no_life_game = False
         # 최근 100개의 점수가 195점 넘을 때까지 학습
         while np.mean(recent_rlist) <= 195:
             episode += 1
@@ -238,26 +207,26 @@ def main():
             state_memory = deque()
             action_memory = deque()
             reward_memory = deque()
-            rewards = np.empty(0).reshape(0, 1)
-            history = np.zeros([84, 84, 5], dtype=np.uint8)
+
+            history = np.zeros([84, 84, HISTORY_SIZE+1], dtype=np.uint8)
             rall, count = 0, 0
             done = False
-            ter = False
-            start_lives = 0
+
             s = env.reset()
             max_prob = deque()
             get_init_state(history, s)
-
+            start_lives = 0
             while not done:
                 #env.render()
                 count += 1
                 # 액션 선택
-                action = PGagent.get_action(history[:,:,:4], max_prob)
+                action = PGagent.get_action(history[:,:,:HISTORY_SIZE], max_prob)
 
                 # action을 one_hot으로 표현
                 y = np.zeros(OUTPUT)
                 y[action] = 1
 
+                # 학습속도 개선을 위한 액션수 줄임
                 if action == 0:
                     real_a = 1
                 elif action == 1:
@@ -265,39 +234,34 @@ def main():
                 else:
                     real_a = 5
 
-                s1, reward, done, l = env.step(action + 1)
+                s1, reward, done, l = env.step(real_a)
 
                 ter = done
                 rall += reward
                 reward = np.clip(reward, -1, 1)
+
                 # 라이프가 있는 게임인지 아닌지 판별
                 no_life_game, start_lives = get_game_type(count, l, no_life_game, start_lives)
 
                 # 라이프가 줄어들거나 negative 리워드를 받았을 때 terminal 처리를 해줌
                 ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
-                # 목숨이 줄어 들었을때 -1 리워드를 줌(for Breakout)
-                #if ter:
-                #    reward = -1
+                # 죽었을때 학습을 하기위한 negative reward
+                if ter:
+                    reward = -1
 
-                state_memory.append(np.copy(np.float32(history[:,:,:4]/255.)))
+                state_memory.append(np.copy(np.float32(history[:,:,:HISTORY_SIZE]/255.)))
                 action_memory.append(np.copy(y))
                 reward_memory.append(np.copy(reward))
-                '''
-                if reward != 0:
-                    ep_reward = np.vstack(reward_memory)
-                    discounted_rewards = discount_rewards(ep_reward)
-                    rewards = np.vstack([rewards, discounted_rewards])
-                    reward_memory = deque()
-                '''
+
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
-                history[:, :, 4] = pre_proc(s1)
-                history[:, :, :4] = history[:, :, 1:]
+                history[:, :, HISTORY_SIZE] = pre_proc(s1)
+                history[:, :, :HISTORY_SIZE] = history[:, :, 1:]
 
                 # 에피소드가 끝났을때 학습
                 if done:
                     rewards = discount_rewards(np.vstack(reward_memory))
-                    # print(np.stack(state_memory, axis =0).shape, np.stack(action_memory, axis =0).shape, np.reshape(rewards, [-1,1]).shape)
+
                     l = train_episodic(PGagent, np.stack(state_memory, axis=0),
                                        np.stack(action_memory, axis =0), rewards)
 
@@ -308,7 +272,6 @@ def main():
 
             if episode % 10 == 0:
                 PGagent.saver.save(PGagent.sess, model_path, global_step= episode)
-        play_atari(PGagent)
 
 
 if __name__ == "__main__":
