@@ -103,7 +103,7 @@ class ActorCritic:
 
         # Policy loss
         self.log_p = self.Y * tf.log(tf.clip_by_value(self.a_prob,1e-10,1.))
-        self.log_lik = self.log_p * self.adv
+        self.log_lik = self.log_p * tf.stop_gradient(self.adv)
         self.p_loss = -tf.reduce_mean(tf.reduce_sum(self.log_lik, axis=1))
 
         # entropy(for more exploration)
