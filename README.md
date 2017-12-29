@@ -1,5 +1,5 @@
 # Reinforcement Learning
-###### OpenAI È¯°æ¿¡ Àû¿ëÇØº¸´Â °­È­ÇĞ½À ¿¹Á¦
+###### OpenAI í™˜ê²½ì— ì ìš©í•´ë³´ëŠ” ê°•í™”í•™ìŠµ ì˜ˆì œ
 
 ![Alt text](/readme/Play.gif) 
 ###### [Breakout / Use DQN(Nature2015)] 
@@ -16,23 +16,28 @@
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_Q-Network.py)
 
 ## 3. DQN(NIPS2013)
-DQN(NIPS2013)Àº (Experience Replay Memory / CNN) À» »ç¿ë.
-* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_NIPS2013.py) - Cartpole °°Àº °æ¿ì¿¡´Â CNNÀ» »ç¿ëÇÏÁö ¾Ê°í ¼¾¼­ Á¤º¸¸¦ ÅëÇØ¼­ ÇĞ½À
+DQN(NIPS2013)ì€ (Experience Replay Memory / CNN) ì„ ì‚¬ìš©.
+* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_NIPS2013.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
 
 ## 4. DQN(Nature2015)
-DQN(Nature2015)Àº (Experience Replay Memory / Target Network / CNN) À» »ç¿ë
+DQN(Nature2015)ì€ (Experience Replay Memory / Target Network / CNN) ì„ ì‚¬ìš©
 
-* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_Nature2015.py) - Cartpole °°Àº °æ¿ì¿¡´Â CNNÀ» »ç¿ëÇÏÁö ¾Ê°í ¼¾¼­ Á¤º¸¸¦ ÅëÇØ¼­ ÇĞ½À
+* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_Nature2015.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
 * [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/Breakout_DQN_class.py)
 
 ## 5. Policy Gradient
-* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PolicyGradient.py) - Cartpole °°Àº °æ¿ì¿¡´Â CNNÀ» »ç¿ëÇÏÁö ¾Ê°í ¼¾¼­ Á¤º¸¸¦ ÅëÇØ¼­ ÇĞ½À
+* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PolicyGradient.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
 * [Pong(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Pong/Pong_PolicyGradient.py)
 * [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/Breakout_PolicyGradient.py)
 
-## 6. A2C(Actor Critic)
+## 6. Advantage Actor Critic
 * episodic
-	* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_A2C_episodic.py) - Cartpole °°Àº °æ¿ì¿¡´Â CNNÀ» »ç¿ëÇÏÁö ¾Ê°í ¼¾¼­ Á¤º¸¸¦ ÅëÇØ¼­ ÇĞ½À
+	* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_A2C_episodic.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
 	* [Pong(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Pong/Pong_A2C_episodic.py)
 * one-step
-    *  [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/Cartpole_A2C_onestep.py) - Cartpole °°Àº °æ¿ì¿¡´Â CNNÀ» »ç¿ëÇÏÁö ¾Ê°í ¼¾¼­ Á¤º¸¸¦ ÅëÇØ¼­ ÇĞ½À
+    *  [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/Cartpole_A2C_onestep.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
+* n-step
+    * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/Cartpole_A2C_nstep.py) - Cartpole ê°™ì€ ê²½ìš°ì—ëŠ” CNNì„ ì‚¬ìš©í•˜ì§€ ì•Šê³  ì„¼ì„œ ì •ë³´ë¥¼ í†µí•´ì„œ í•™ìŠµ
+
+## 7. PAAC(Parallel Advantage Actor Critic)
+* Work In Progress
