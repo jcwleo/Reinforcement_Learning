@@ -8,9 +8,9 @@
 ---------------
 ## 1. Q-Learning / SARSA
 * FrozenLake(Gridword)
-	* [Deterministic](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-Table.py)
-	* [Exploration & Discounted Factor](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-table_exp%26dis.py)
-	* [Stochastic](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-table_Stochastic.py)
+	* [Deterministic Q-Learning](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-Table.py)
+	* [Add Exploration & Discounted Factor](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-table_exp%26dis.py)
+	* [Stochastic Q-Learning](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-table_Stochastic.py)
 * WindyGridWorld(in Sutton's book)
     * [Q-Learning / SARSA](https://github.com/jcwleo/Reinforcement_Learning/tree/master/Windygridworld)
 ## 2. Q-Network (just use network)
