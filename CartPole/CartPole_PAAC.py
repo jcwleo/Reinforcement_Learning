@@ -79,9 +79,12 @@ class ActorCritic:
         # entropy(for more exploration)
         self.entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.a_prob, logits=self.a))
 
-        self.loss = self.p_loss + self.v_loss - self.entropy * 0.01
+        self.loss = self.p_loss - self.entropy * 0.01 + self.v_loss * 0.5
 
-        self.train = tf.train.RMSPropOptimizer(learning_rate=self.LR, epsilon=EPSILON).minimize(self.loss)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=self.LR, epsilon=EPSILON, decay=ALPHA)
+        gradients, variables = zip(*optimizer.compute_gradients(self.loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, 3.0)
+        self.train = optimizer.apply_gradients(zip(gradients, variables))
 
     def get_action(self, state):
         state_t = np.reshape(state, [1, self.input_size])
@@ -185,8 +188,8 @@ if __name__ == "__main__":
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NSTEP = 5
-    NENV = 8
-    EPSILON = 0.1
-    LEARNING_RATE = 7e-4 * NENV
-    env.close()
+    NENV = 16
+    EPSILON = 1e-5
+    ALPHA = 0.99
+    LEARNING_RATE = 7e-4
     main()
