@@ -3,8 +3,7 @@
 
 ![Alt text](/readme/Play.gif)
 ###### [Breakout / Use DQN(Nature2015)]
-![Alt text](/readme/1x1conv.gif)
-###### [Breakout / Image from the first conv layer(1x1)]
+
 ---------------
 ## 1. Q-Learning / SARSA
 * FrozenLake(Gridword)
@@ -42,4 +41,4 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
     * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/Cartpole_A2C_nstep.py) - Cartpole 같은 경우에는 CNN을 사용하지 않고 센서 정보를 통해서 학습
 
 ## 7. PAAC(Parallel Advantage Actor Critic)
-* Work In Progress
+* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PAAC.py)(used a single thread instead of multi thread)
