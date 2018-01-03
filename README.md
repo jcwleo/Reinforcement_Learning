@@ -26,7 +26,7 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_Nature2015.py) - Cartpole 같은 경우에는 CNN을 사용하지 않고 센서 정보를 통해서 학습
 * [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/Breakout_DQN_class.py)
 
-## 5. Policy Gradient
+## 5. Vanilla Policy Gradient(REINFORCE)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PolicyGradient.py) - Cartpole 같은 경우에는 CNN을 사용하지 않고 센서 정보를 통해서 학습
 * [Pong(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Pong/Pong_PolicyGradient.py)
 * [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/Breakout_PolicyGradient.py)
@@ -40,5 +40,5 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 * n-step
     * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/Cartpole_A2C_nstep.py) - Cartpole 같은 경우에는 CNN을 사용하지 않고 센서 정보를 통해서 학습
 
-## 7. PAAC(Parallel Advantage Actor Critic)
+## 7. Parallel Advantage Actor Critic(is called 'A2C' in OpenAI)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PAAC.py)(used a single thread instead of multi thread)
