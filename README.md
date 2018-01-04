@@ -12,7 +12,7 @@
 	* [Stochastic Q-Learning](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FL_Q-table_Stochastic.py)
 * WindyGridWorld(in Sutton's book)
     * [Q-Learning / SARSA](https://github.com/jcwleo/Reinforcement_Learning/tree/master/Windygridworld)
-## 2. Q-Network (just use network)
+## 2. Q-Network (Action-Value Function Approximation)
 * [FrozenLake(Gridword)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FrozenLake_Q-Network.py)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_Q-Network.py)
 
