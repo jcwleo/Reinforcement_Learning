@@ -16,11 +16,10 @@
 * [FrozenLake(Gridword)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/FrozenLake/FrozenLake_Q-Network.py)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_Q-Network.py)
 
-## 3. DQN(NIPS2013)
+## 3. DQN
 DQN(NIPS2013)은 (Experience Replay Memory / CNN) 을 사용.
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_NIPS2013.py) - Cartpole 같은 경우에는 CNN을 사용하지 않고 센서 정보를 통해서 학습
 
-## 4. DQN(Nature2015)
 DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_Nature2015.py)
