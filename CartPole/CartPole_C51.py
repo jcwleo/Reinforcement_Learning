@@ -9,14 +9,10 @@ import matplotlib.pyplot as plt
 
 from collections import deque
 
-plt.ion()
-# DQN paper setting(frameskip = 4, repeat_action_probability = 0)
-# {}Deterministic : frameskip = 4
-# {}-v4 : repeat_action_probability
 env = gym.make('CartPole-v1')
 
 # 하이퍼 파라미터
-MINIBATCH_SIZE = 32
+MINIBATCH_SIZE = 64
 TRAIN_START = 1000
 FINAL_EXPLORATION = 0.01
 TARGET_UPDATE = 1000
@@ -84,7 +80,7 @@ def train_minibatch(mainC51, targetC51, minibatch):
         s1_stack.append(s1_r)
         d_stack.append(d_r)
 
-    # Category Algorighm
+    ## Categorical Algorighm
     target_sum_q = targetC51.sess.run(targetC51.dist_Q, feed_dict={targetC51.X: np.vstack(s1_stack)})
 
     # Get optimal action
@@ -94,16 +90,22 @@ def train_minibatch(mainC51, targetC51, minibatch):
 
     for i in range(len(s_stack)):
         if d_stack[i]:
+            # Compute the projection of Tz
             Tz = min(VMAX, max(VMIN, r_stack[i]))
             bj = (Tz - VMIN) / mainC51.delta_z
             m_l, m_u = math.floor(bj), math.ceil(bj)
+
+            # Distribute probability Tz
             m_prob[a_stack[i]][i][int(m_l)] += (m_u - bj)
             m_prob[a_stack[i]][i][int(m_u)] += (bj - m_l)
         else:
             for j in range(mainC51.category_size):
+                # Compute the projection of Tz
                 Tz = min(VMAX, max(VMIN, r_stack[i] + DISCOUNT * mainC51.z[j]))
                 bj = (Tz - VMIN) / mainC51.delta_z
                 m_l, m_u = math.floor(bj), math.ceil(bj)
+
+                # Distribute probability Tz
                 m_prob[a_stack[i]][i][int(m_l)] += (m_u - bj) * target_sum_q[optimal_action[i]][i][j]
                 m_prob[a_stack[i]][i][int(m_u)] += (bj - m_l) * target_sum_q[optimal_action[i]][i][j]
 
@@ -134,11 +136,11 @@ class C51Agent:
 
             # Output weight
             for i in range(self.output_size):
-                exec(
-                    'w2_%s = tf.get_variable("w2_%s", shape=[256, self.category_size], initializer=tf.contrib.layers.xavier_initializer())' % (
-                    i, i))
+                exec('w2_%s = tf.get_variable("w2_%s", shape=[256, self.category_size], initializer=tf.contrib.layers.xavier_initializer())' % (
+                        i, i))
 
             l1 = tf.nn.relu(tf.matmul(self.X, w1))
+            # Output Layer
             for i in range(self.output_size):
                 exec('self.dist_Q.append(tf.matmul(l1, w2_%s))' % i)
 
