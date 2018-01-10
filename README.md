@@ -44,4 +44,4 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 
 ## 8. C51(Distributional RL)
 * DDQN
-	** [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_C51.py)
+	* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_C51.py)
