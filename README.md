@@ -41,3 +41,7 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 
 ## 7. Parallel Advantage Actor Critic(is called 'A2C' in OpenAI)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PAAC.py)(used a single thread instead of multi thread)
+
+## 8. C51(Distributional RL)
+* DDQN
+	** [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_C51.py)
