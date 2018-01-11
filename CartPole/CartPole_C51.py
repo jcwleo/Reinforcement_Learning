@@ -21,12 +21,10 @@ EXPLORATION = 20000
 START_EXPLORATION = 1.
 INPUT = env.observation_space.shape[0]
 OUTPUT = env.action_space.n
-LEARNING_RATE = 0.00025
+LEARNING_RATE = 0.001
 DISCOUNT = 0.99
-EPSILON = 0.01
-MOMENTUM = 0.95
-VMIN = -50
-VMAX = 100
+VMIN = -10
+VMAX = 40
 CATEGORY = 51
 
 model_path = "save/CartPole_C51.ckpt"
@@ -71,7 +69,7 @@ def train_minibatch(mainC51, targetC51, minibatch):
     r_stack = []
     s1_stack = []
     d_stack = []
-    m_prob = [np.zeros((len(minibatch), mainC51.category_size)) for i in range(OUTPUT)]
+    m_prob = [np.zeros((len(minibatch), mainC51.category_size)) for _ in range(OUTPUT)]
 
     for s_r, a_r, r_r, d_r, s1_r in minibatch:
         s_stack.append(s_r)
@@ -80,15 +78,15 @@ def train_minibatch(mainC51, targetC51, minibatch):
         s1_stack.append(s1_r)
         d_stack.append(d_r)
 
-    ## Categorical Algorighm
-    target_sum_q = targetC51.sess.run(targetC51.dist_Q, feed_dict={targetC51.X: np.vstack(s1_stack)})
+    # Categorical Algorithm
+    target_sum_q = targetC51.sess.run(targetC51.soft_dist_Q, feed_dict={targetC51.X: np.vstack(s1_stack)})
 
     # Get optimal action
     sum_q = mainC51.optimal_action(s1_stack)
-    sum_q = sum_q.reshape([len(s_stack), OUTPUT], order='F')
-    optimal_action = np.argmax(sum_q, axis=1)
+    sum_q = sum_q.reshape([len(minibatch), OUTPUT], order='F')
+    optimal_actions = np.argmax(sum_q, axis=1)
 
-    for i in range(len(s_stack)):
+    for i in range(len(minibatch)):
         if d_stack[i]:
             # Compute the projection of Tz
             Tz = min(VMAX, max(VMIN, r_stack[i]))
@@ -106,8 +104,8 @@ def train_minibatch(mainC51, targetC51, minibatch):
                 m_l, m_u = math.floor(bj), math.ceil(bj)
 
                 # Distribute probability Tz
-                m_prob[a_stack[i]][i][int(m_l)] += (m_u - bj) * target_sum_q[optimal_action[i]][i][j]
-                m_prob[a_stack[i]][i][int(m_u)] += (bj - m_l) * target_sum_q[optimal_action[i]][i][j]
+                m_prob[a_stack[i]][i][int(m_l)] += (m_u - bj) * target_sum_q[optimal_actions[i]][i][j]
+                m_prob[a_stack[i]][i][int(m_u)] += (bj - m_l) * target_sum_q[optimal_actions[i]][i][j]
 
     mainC51.sess.run(mainC51.train, feed_dict={mainC51.X: np.vstack(s_stack), mainC51.Y: m_prob})
 
@@ -136,16 +134,18 @@ class C51Agent:
 
             # Output weight
             for i in range(self.output_size):
-                exec('w2_%s = tf.get_variable("w2_%s", shape=[256, self.category_size], initializer=tf.contrib.layers.xavier_initializer())' % (
+                exec(
+                    'w2_%s = tf.get_variable("w2_%s", shape=[256, self.category_size], initializer=tf.contrib.layers.xavier_initializer())' % (
                         i, i))
 
-            l1 = tf.nn.relu(tf.matmul(self.X, w1))
+            l1 = tf.nn.selu(tf.matmul(self.X, w1))
             # Output Layer
             for i in range(self.output_size):
                 exec('self.dist_Q.append(tf.matmul(l1, w2_%s))' % i)
 
+        self.soft_dist_Q = tf.nn.softmax(self.dist_Q)
         self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.Y, logits=self.dist_Q))
-        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, momentum=MOMENTUM, epsilon=EPSILON)
+        optimizer = tf.train.AdamOptimizer(LEARNING_RATE)
         self.train = optimizer.minimize(self.loss)
 
         self.saver = tf.train.Saver(max_to_keep=None)
@@ -161,7 +161,7 @@ class C51Agent:
     def optimal_action(self, state):
         state = np.vstack(state)
         state = state.reshape([-1, self.input_size])
-        z = self.sess.run(self.dist_Q, feed_dict={self.X: state})
+        z = self.sess.run(self.soft_dist_Q, feed_dict={self.X: state})
         z_stack = np.vstack(z)
         sum_q = np.sum(np.multiply(z_stack, np.array(self.z)), axis=1)
         return sum_q
@@ -208,7 +208,7 @@ def main():
                 # s1 : next frame / r : reward / d : done(terminal) / l : info(lives)
                 s1, r, d, l = env.step(action)
                 if d and count < env.spec.timestep_limit:
-                    reward = -100
+                    reward = -1
                 else:
                     reward = r
 
