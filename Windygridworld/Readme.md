@@ -1,4 +1,4 @@
 # Windy Gridworld
-![Alt text](../readme/windy.png)
-![Alt text](../readme/sarsa.png)
-![Alt text](../readme/q-learning.png)
+![Alt text](../readme/windy.PNG)
+![Alt text](../readme/sarsa.PNG)
+![Alt text](../readme/q-learning.PNG)
