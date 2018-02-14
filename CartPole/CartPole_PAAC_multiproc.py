@@ -210,7 +210,7 @@ if __name__ == '__main__':
     DISCOUNT = 0.99
     NUM_STEP = 5
     NUM_ENV = 8
-    NUM_WORKER = 8
+    NUM_WORKER = NUM_ENV
     EPSILON = 1e-5
     ALPHA = 0.99
     LEARNING_RATE = 7e-4
