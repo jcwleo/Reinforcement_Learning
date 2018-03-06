@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-# 김성훈님 ( https://github.com/hunkim/ReinforcementZeroToAll/blob/master/07_3_dqn_2015_cartpole.py )
-# 김태훈님 ( https://github.com/devsisters/DQN-tensorflow )
-# 코드를 참조했습니다. 감사합니다!
-#
+
 import tensorflow as tf
 import gym
 
@@ -24,10 +21,10 @@ env = gym.make('BreakoutDeterministic-v4')
 # 하이퍼 파라미터
 MINIBATCH_SIZE = 32
 HISTORY_SIZE = 4
-TRAIN_START = 50000
+TRAIN_START = 1000
 FINAL_EXPLORATION = 0.1
 TARGET_UPDATE = 10000
-MEMORY_SIZE = 400000
+MEMORY_SIZE = 200000
 EXPLORATION = 1000000
 START_EXPLORATION = 1.
 INPUT = env.observation_space.shape
@@ -40,18 +37,6 @@ EPSILON = 0.01
 MOMENTUM = 0.95
 
 model_path = "save/Breakout.ckpt"
-
-
-def cliped_error(error):
-    '''후버로스를 사용하여 error 클립.
-
-    Args:
-        error(tensor): 클립을 해야할 tensor
-
-    Returns:
-        tensor: -1 ~ 1 사이로 클립된 error
-    '''
-    return tf.where(tf.abs(error) < 1.0, 0.5 * tf.square(error), tf.abs(error) - 0.5)
 
 
 def pre_proc(X):
@@ -108,58 +93,20 @@ def get_init_state(history, s):
         history[:, :, i] = pre_proc(s)
 
 
-def get_game_type(count, l, no_life_game, start_live):
-    '''라이프가 있는 게임인지 판별
-
-    Args:
-        count(int): 에피소드 시작 후 첫 프레임인지 확인하기 위한 arg
-        l(dict): 라이프 값들이 저장되어있는 dict ex) l['ale.lives']
-        no_life_game(bool): 라이프가 있는 게임일 경우, bool 값을 반환해주기 위한 arg
-        start_live(int): 라이프가 있는 경우 라이프값을 초기화 하기 위한 arg
-
-    Returns:
-        list:
-            no_life_game(bool): 라이프가 없는 게임이면 True, 있으면 False
-            start_live(int): 라이프가 있는 게임이면 초기화된 라이프
-    '''
-    if count == 1:
-        start_live = l['ale.lives']
-        # 시작 라이프가 0일 경우, 라이프 없는 게임
-        if start_live == 0:
-            no_life_game = True
-        else:
-            no_life_game = False
-    return [no_life_game, start_live]
+def find_max_lifes(env):
+    env.reset()
+    _, _, _, info = env.step(0)
+    return info['ale.lives']
 
 
-def get_terminal(start_live, l, reward, no_life_game, ter):
-    '''목숨이 줄어들거나, negative reward를 받았을 때, terminal 처리
-
-    Args:
-        start_live(int): 라이프가 있는 게임일 경우, 현재 라이프 수
-        l(dict): 다음 상태에서 라이프가 줄었는지 확인하기 위한 다음 frame의 라이프 info
-        no_life_game(bool): 라이프가 없는 게임일 경우, negative reward를 받으면 terminal 처리를 해주기 위한 게임 타입
-        ter(bool): terminal 처리를 저장할 arg
-
-    Returns:
-        list:
-            ter(bool): terminal 상태
-            start_live(int): 줄어든 라이프로 업데이트된 값
-    '''
-    if no_life_game:
-        # 목숨이 없는 게임일 경우 Terminal 처리
-        if reward < 0:
-            ter = True
+def check_live(life, cur_life):
+    if life > cur_life:
+        return True
     else:
-        # 목숨 있는 게임일 경우 Terminal 처리
-        if start_live > l['ale.lives']:
-            ter = True
-            start_live = l['ale.lives']
-
-    return [ter, start_live]
+        return False
 
 
-def train_minibatch(mainDQN, targetDQN, minibatch):
+def train_minibatch(mainDQN, targetDQN, mini_batch):
     '''미니배치로 가져온 sample데이터로 메인네트워크 학습
 
     Args:
@@ -170,29 +117,26 @@ def train_minibatch(mainDQN, targetDQN, minibatch):
     Note:
         replay_memory에서 꺼내온 값으로 메인 네트워크를 학습
     '''
-    s_stack = []
-    a_stack = []
-    r_stack = []
-    s1_stack = []
-    d_stack = []
+    mini_batch = np.array(mini_batch).transpose()
 
-    for s_r, a_r, r_r, d_r in minibatch:
-        s_stack.append(s_r[:, :, :4])
-        a_stack.append(a_r)
-        r_stack.append(r_r)
-        s1_stack.append(s_r[:, :, 1:])
-        d_stack.append(d_r)
+    history = np.stack(mini_batch[0], axis=0)
 
-    # True, False 값을 1과 0으로 변환
-    d_stack = np.array(d_stack) + 0
+    states = np.float32(history[:, :, :, :4]) / 255.
+    actions = list(mini_batch[1])
+    rewards = list(mini_batch[2])
+    next_states = np.float32(history[:, :, :, 1:]) / 255.
+    dones = mini_batch[3]
 
-    Q1 = targetDQN.get_q(np.array(s1_stack))
+    # bool to binary
+    dones = dones.astype(int)
 
-    y = r_stack + (1 - d_stack) * DISCOUNT * np.max(Q1, axis=1)
+    Q1 = targetDQN.get_q(next_states)
+
+    y = rewards + (1 - dones) * DISCOUNT * np.max(Q1, axis=1)
 
     # 업데이트 된 Q값으로 main네트워크를 학습
-    mainDQN.sess.run(mainDQN.train, feed_dict={mainDQN.X: np.float32(np.array(s_stack) / 255.), mainDQN.Y: y,
-                                               mainDQN.a: a_stack})
+    mainDQN.sess.run(mainDQN.train, feed_dict={mainDQN.X: states, mainDQN.Y: y,
+                                               mainDQN.a: actions})
 
 
 # 데이터 플롯
@@ -256,10 +200,8 @@ class DQNAgent:
         a_one_hot = tf.one_hot(self.a, self.output, 1.0, 0.0)
         q_val = tf.reduce_sum(tf.multiply(self.Q_pre, a_one_hot), reduction_indices=1)
 
-        # error를 -1~1 사이로 클립
-        error = cliped_error(self.Y - q_val)
-
-        self.loss = tf.reduce_mean(error)
+        # huber loss
+        self.loss = tf.losses.huber_loss(self.Y, q_val)
 
         optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, momentum=MOMENTUM, epsilon=EPSILON)
         self.train = optimizer.minimize(self.loss)
@@ -267,7 +209,7 @@ class DQNAgent:
         self.saver = tf.train.Saver(max_to_keep=None)
 
     def get_q(self, history):
-        return self.sess.run(self.Q_pre, feed_dict={self.X: np.reshape(np.float32(history / 255.),
+        return self.sess.run(self.Q_pre, feed_dict={self.X: np.reshape(history,
                                                                        [-1, 84, 84, 4])})
 
     def get_action(self, q, e):
@@ -279,7 +221,9 @@ class DQNAgent:
 
 
 def main():
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         mainDQN = DQNAgent(sess, HEIGHT, WIDTH, HISTORY_SIZE, OUTPUT, NAME='main')
         targetDQN = DQNAgent(sess, HEIGHT, WIDTH, HISTORY_SIZE, OUTPUT, NAME='target')
 
@@ -298,9 +242,10 @@ def main():
         average_Q, average_reward = deque(), deque()
 
         epoch_on = False
-        no_life_game = False
+
         replay_memory = deque(maxlen=MEMORY_SIZE)
 
+        max_life = find_max_lifes(env)
         # Train agent during 200 epoch
         while epoch <= 200:
             episode += 1
@@ -308,10 +253,8 @@ def main():
             history = np.zeros([84, 84, 5], dtype=np.uint8)
             rall, count = 0, 0
             d = False
-            ter = False
-            start_lives = 0
             s = env.reset()
-
+            life = max_life
             get_init_state(history, s)
 
             while not d:
@@ -325,22 +268,16 @@ def main():
                     e -= (START_EXPLORATION - FINAL_EXPLORATION) / EXPLORATION
 
                 # 히스토리의 0~4까지 부분으로 Q값 예측
-                Q = mainDQN.get_q(history[:, :, :4])
+                Q = mainDQN.get_q(np.float32(history[:, :, :4]) / 255.)
                 average_Q.append(np.max(Q))
 
                 # 액션 선택
                 action = mainDQN.get_action(Q, e)
 
                 # s1 : next frame / r : reward / d : done(terminal) / l : info(lives)
-                s1, r, d, l = env.step(action)
-                ter = d
+                s1, r, d, i = env.step(action)
+                ter = check_live(life, i['ale.lives'])
                 reward = np.clip(r, -1, 1)
-
-                # 라이프가 있는 게임인지 아닌지 판별
-                no_life_game, start_lives = get_game_type(count, l, no_life_game, start_lives)
-
-                # 라이프가 줄어들거나 negative 리워드를 받았을 때 terminal 처리를 해줌
-                ter, start_lives = get_terminal(start_lives, l, reward, no_life_game, ter)
 
                 # 새로운 프레임을 히스토리 마지막에 넣어줌
                 history[:, :, 4] = pre_proc(s1)
@@ -386,7 +323,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
