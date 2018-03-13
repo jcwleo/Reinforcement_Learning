@@ -24,6 +24,8 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_DQN_Nature2015.py)
 * [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/Breakout_DQN_class.py)
+* [Breakout(atari)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/Breakout/breakout_dqn_pytorch.py)
+	* this code is made by pytorch and more efficient memory and train
 
 ## 5. Vanilla Policy Gradient(REINFORCE)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PolicyGradient.py)
