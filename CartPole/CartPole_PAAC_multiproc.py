@@ -1,9 +1,11 @@
 import gym
 import numpy as np
+import multiprocessing as pmp
 
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.multiprocessing as mp
+
 import torch.nn as nn
 import torch
 
@@ -13,7 +15,7 @@ from torch.autograd import Variable
 from torch.distributions import Categorical
 
 
-def make_batch(sample):
+def make_batch(sample, agent):
     sample = np.stack(sample)
     discounted_return = np.empty([NUM_STEP, 1])
 
@@ -74,6 +76,7 @@ class ActorCriticNetwork(nn.Module):
 class A2CAgent(object):
     def __init__(self):
         self.model = ActorCriticNetwork(INPUT, OUTPUT)
+        self.model.share_memory()
         self.output_size = OUTPUT
         self.input_size = INPUT
         self.optimizer = optim.RMSprop(self.model.parameters(), lr=LEARNING_RATE,
@@ -96,7 +99,7 @@ class A2CAgent(object):
 
         # for multiply advantage
         ce = nn.CrossEntropyLoss(reduce=False)
-        mse = nn.MSELoss()
+        mse = nn.SmoothL1Loss()
 
         # Actor loss
         actor_loss = ce(self.model(s_batch)[0], y_batch) * adv_batch.sum(1)
@@ -132,6 +135,18 @@ class Environment(object):
         sample = []
         for _ in range(NUM_STEP):
             self.step += 1
+            action = agent.get_action(self.obs)
+            self.next_obs, reward, self.done, _ = self.env.step(action)
+            self.rall += reward
+
+            # negative reward
+            if self.done and self.step < self.env.spec.timestep_limit:
+                reward = -100
+
+            sample.append([self.obs, action, reward, self.next_obs, self.done])
+
+            self.obs = self.next_obs
+
             if self.done:
                 self.episode += 1
                 if self.env_idx == 0:
@@ -144,62 +159,64 @@ class Environment(object):
                 self.step = 0
                 self.rall = 0
 
-            action = agent.get_action(self.obs)
-            self.next_obs, reward, self.done, _ = self.env.step(action)
-            self.rall += reward
-
-            # negative reward
-            if self.done and self.step < self.env.spec.timestep_limit:
-                reward = -100
-
-            sample.append([self.obs, action, reward, self.next_obs, self.done])
-            self.obs = self.next_obs
-        return make_batch(sample)
+        return make_batch(sample, agent)
 
 
-def runner(env):
+def runner(env, cond, memory, agent):
     while True:
         with cond:
             sample = env.run(agent)
             memory.put(sample)
+            # wait runner
             cond.wait()
 
 
-def learner():
+def learner(cond, memory, agent):
     while True:
-        with cond:
+        if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
-            if memory.full():
-                while not memory.empty():
-                    batch = memory.get()
+            while not memory.empty():
+                batch = memory.get()
 
-                    s_batch.extend(batch[0])
-                    target_batch.extend(batch[1])
-                    y_batch.extend(batch[2])
-                    adv_batch.extend(batch[3])
+                s_batch.extend(batch[0])
+                target_batch.extend(batch[1])
+                y_batch.extend(batch[2])
+                adv_batch.extend(batch[3])
 
-                # train
-                agent.train_model(s_batch, target_batch, y_batch, adv_batch)
+            # resume running
+            with cond:
                 cond.notify_all()
+
+            # train
+            agent.train_model(s_batch, target_batch, y_batch, adv_batch)
 
 
 def main():
-    num_worker = NUM_WORKER
     num_envs = NUM_ENV
+    memory = mp.Queue(maxsize=NUM_ENV)
+    cond = mp.Condition()
 
-    pool = mp.Pool(processes=num_worker)
+    # make agent and share memory
+    agent = A2CAgent()
 
     # make envs
     envs = [Environment(gym.make('CartPole-v1'), i) for i in range(num_envs)]
 
     # Learner Process(only Learn)
-    learn_proc = mp.Process(target=learner)
-    learn_proc.start()
+    learn_proc = mp.Process(target=learner, args=(cond, memory, agent))
 
     # Runner Process(just run, not learn)
-    pool.map(runner, envs)
+    runners = []
+    for idx, env in enumerate(envs):
+        run_proc = mp.Process(target=runner, args=(env, cond, memory, agent))
+        runners.append(run_proc)
+        run_proc.start()
 
+    learn_proc.start()
     learn_proc.join()
+
+    for proc in runners:
+        proc.join()
 
 
 if __name__ == '__main__':
@@ -209,18 +226,10 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 8
-    NUM_WORKER = NUM_ENV
+    NUM_ENV = 16
     EPSILON = 1e-5
     ALPHA = 0.99
     LEARNING_RATE = 7e-4
     env.close()
-
-    # make agent and share memory
-    agent = A2CAgent()
-    agent.model.share_memory()
-
-    cond = mp.Condition()
-    memory = mp.Queue(maxsize=NUM_ENV)
 
     main()
