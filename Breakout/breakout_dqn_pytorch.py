@@ -79,7 +79,7 @@ class DQNAgent():
 
         # These are hyper parameters for the DQN
         self.discount_factor = 0.99
-        self.learning_rate = 0.00025
+        self.learning_rate = 0.0001
         self.memory_size = 1000000
         self.epsilon = 1.0
         self.epsilon_min = 0.02
@@ -100,7 +100,7 @@ class DQNAgent():
         self.target_model.cuda()
 
         # self.optimizer = optim.RMSprop(params=self.model.parameters(),lr=self.learning_rate, eps=0.01, momentum=0.95)
-        self.optimizer = optim.Adam(params=self.model.parameters(), lr=0.0001)
+        self.optimizer = optim.Adam(params=self.model.parameters(), lr=self.learning_rate)
 
         # initialize target model
         self.update_target_model()
