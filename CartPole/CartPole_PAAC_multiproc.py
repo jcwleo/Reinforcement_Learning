@@ -11,8 +11,7 @@ import torch
 
 from collections import deque
 
-from torch.autograd import Variable
-from torch.distributions import Categorical
+from torch.distributions.categorical import Categorical
 
 
 def make_batch(sample, agent):
@@ -26,11 +25,11 @@ def make_batch(sample, agent):
     d = np.reshape(np.stack(sample[:, 4]), [NUM_STEP, 1])
 
     state = torch.from_numpy(s)
-    state = Variable(state).float()
+    state = state.float()
     _, value = agent.model(state)
 
     next_state = torch.from_numpy(s1)
-    next_state = Variable(next_state).float()
+    next_state = next_state.float()
     _, next_value = agent.model(next_state)
 
     value = value.data.numpy()
@@ -58,9 +57,9 @@ class ActorCriticNetwork(nn.Module):
         super(ActorCriticNetwork, self).__init__()
         self.feature = nn.Sequential(
             nn.Linear(input_size, 64),
-            nn.ELU(),
+            nn.ReLU(),
             nn.Linear(64, 64),
-            nn.ELU()
+            nn.ReLU()
         )
         self.actor = nn.Linear(64, output_size)
         self.critic = nn.Linear(64, 1)
@@ -79,27 +78,27 @@ class A2CAgent(object):
         self.model.share_memory()
         self.output_size = OUTPUT
         self.input_size = INPUT
-        self.optimizer = optim.RMSprop(self.model.parameters(), lr=LEARNING_RATE,
-                                       eps=EPSILON, weight_decay=ALPHA)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def get_action(self, state):
         state = torch.from_numpy(state)
-        state = Variable(state).float()
+        state = state.float()
         action, v = self.model(state)
         action_p = F.softmax(action, dim=0)
         m = Categorical(action_p)
         action = m.sample()
-        return action.data[0]
+        return action.item()
 
     def train_model(self, s_batch, target_batch, y_batch, adv_batch):
-        s_batch = Variable(torch.FloatTensor(s_batch))
-        target_batch = Variable(torch.FloatTensor(target_batch))
-        y_batch = Variable(torch.LongTensor(y_batch))
-        adv_batch = Variable(torch.FloatTensor(adv_batch))
+        s_batch = torch.FloatTensor(s_batch)
+        target_batch = torch.FloatTensor(target_batch)
+        y_batch = torch.LongTensor(y_batch)
+        adv_batch = torch.FloatTensor(adv_batch)
 
         # for multiply advantage
         ce = nn.CrossEntropyLoss(reduce=False)
-        mse = nn.SmoothL1Loss()
+        # mse = nn.SmoothL1Loss()
+        mse = nn.MSELoss()
 
         # Actor loss
         actor_loss = ce(self.model(s_batch)[0], y_batch) * adv_batch.sum(1)
@@ -111,7 +110,7 @@ class A2CAgent(object):
         critic_loss = mse(self.model(s_batch)[1], target_batch)
 
         # Total loss
-        loss = actor_loss.sum() + 0.5 * critic_loss - 0.01 * entropy.sum()
+        loss = actor_loss.mean() + 0.5 * critic_loss - 0.01 * entropy.mean()
         self.optimizer.zero_grad()
         loss.backward()
 
@@ -141,9 +140,9 @@ class Environment(object):
 
             # negative reward
             if self.done and self.step < self.env.spec.timestep_limit:
-                reward = -100
+                reward = -1
 
-            sample.append([self.obs, action, reward, self.next_obs, self.done])
+            sample.append([self.obs[:], action, reward, self.next_obs[:], self.done])
 
             self.obs = self.next_obs
 
@@ -167,6 +166,7 @@ def runner(env, cond, memory, agent):
         with cond:
             sample = env.run(agent)
             memory.put(sample)
+
             # wait runner
             cond.wait()
 
@@ -175,7 +175,7 @@ def learner(cond, memory, agent):
     while True:
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
-            while not memory.empty():
+            while memory.qsize() != 0:
                 batch = memory.get()
 
                 s_batch.extend(batch[0])
@@ -186,9 +186,10 @@ def learner(cond, memory, agent):
             # resume running
             with cond:
                 cond.notify_all()
-
             # train
             agent.train_model(s_batch, target_batch, y_batch, adv_batch)
+
+
 
 
 def main():
@@ -226,10 +227,10 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 16
+    NUM_ENV = 3
     EPSILON = 1e-5
     ALPHA = 0.99
-    LEARNING_RATE = 7e-4
+    LEARNING_RATE = 0.001
     env.close()
 
     main()
