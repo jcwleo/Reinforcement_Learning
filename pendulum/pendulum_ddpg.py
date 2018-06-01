@@ -15,55 +15,22 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 
-# [reference] https://github.com/matthiasplappert/keras-rl/blob/master/rl/random.py
-
-class RandomProcess(object):
-    def reset_states(self):
-        pass
-
-
-class AnnealedGaussianProcess(RandomProcess):
-    def __init__(self, mu, sigma, sigma_min, n_steps_annealing):
+class OrnsteinUhlenbeckActionNoise(object):
+    def __init__(self, action_dim, mu=0, theta=0.15, sigma=0.2):
+        self.action_dim = action_dim
         self.mu = mu
-        self.sigma = sigma
-        self.n_steps = 0
-
-        if sigma_min is not None:
-            self.m = -float(sigma - sigma_min) / float(n_steps_annealing)
-            self.c = sigma
-            self.sigma_min = sigma_min
-        else:
-            self.m = 0.
-            self.c = sigma
-            self.sigma_min = sigma
-
-    @property
-    def current_sigma(self):
-        sigma = max(self.sigma_min, self.m * float(self.n_steps) + self.c)
-        return sigma
-
-
-# Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
-class OrnsteinUhlenbeckProcess(AnnealedGaussianProcess):
-    def __init__(self, theta, mu=0., sigma=1., dt=1e-2, x0=None, size=1, sigma_min=None, n_steps_annealing=1000):
-        super(OrnsteinUhlenbeckProcess, self).__init__(mu=mu, sigma=sigma, sigma_min=sigma_min,
-                                                       n_steps_annealing=n_steps_annealing)
         self.theta = theta
-        self.mu = mu
-        self.dt = dt
-        self.x0 = x0
-        self.size = size
-        self.reset_states()
+        self.sigma = sigma
+        self.X = np.ones(self.action_dim) * self.mu
+
+    def reset(self):
+        self.X = np.ones(self.action_dim) * self.mu
 
     def sample(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.current_sigma * np.sqrt(
-            self.dt) * np.random.normal(size=self.size)
-        self.x_prev = x
-        self.n_steps += 1
-        return x
-
-    def reset_states(self):
-        self.x_prev = self.x0 if self.x0 is not None else np.zeros(self.size)
+        dx = self.theta * (self.mu - self.X)
+        dx = dx + self.sigma * np.random.randn(len(self.X))
+        self.X = self.X + dx
+        return self.X
 
 
 class Flatten(nn.Module):
@@ -104,7 +71,7 @@ class Critic(nn.Module):
 
     def forward(self, x, action):
         x = self.before_action(x)
-        x = torch.cat([x, action], dim=2)
+        x = torch.cat([x, action], dim=1)
         x = self.after_action(x)
         return x
 
@@ -135,20 +102,21 @@ class DDPG(object):
         self.memory = deque(maxlen=self.memory_size)
 
         # explortion
-        self.ou = OrnsteinUhlenbeckProcess(args.ou_theta, sigma=args.ou_sigma, mu=args.ou_mu)
+        self.ou = OrnsteinUhlenbeckActionNoise(theta=args.ou_theta, sigma=args.ou_sigma,
+                                               mu=args.ou_mu, action_dim=self.action_size)
 
         # optimizer
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.actor_lr)
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.critic_lr, weight_decay=self.decay)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
         # initialize target model
-        self.update_target_model()
-        self.ou.reset_states()
+        self.actor_target.load_state_dict(self.actor.state_dict())
+        self.critic_target.load_state_dict(self.critic.state_dict())
 
     def get_action(self, state):
         state = torch.from_numpy(state).float()
         model_action = self.actor(state).detach().numpy() * self.action_range
-        action = model_action + self.ou.sample()
+        action = model_action + self.ou.sample() * self.action_range
         return action
 
     def update_target_model(self):
@@ -168,11 +136,11 @@ class DDPG(object):
     def train(self):
         minibatch = np.array(self._get_sample(self.batch_size)).transpose()
 
-        states = np.stack(minibatch[0], axis=0)
-        actions = np.stack(minibatch[1], axis=0)
-        rewards = np.stack(minibatch[2],axis=0)
-        next_states = np.stack(minibatch[3], axis=0)
-        dones = minibatch[4].astype(int)
+        states = np.vstack(minibatch[0])
+        actions = np.vstack(minibatch[1])
+        rewards = np.vstack(minibatch[2])
+        next_states = np.vstack(minibatch[3])
+        dones = np.vstack(minibatch[4].astype(int))
 
         rewards = torch.Tensor(rewards)
         dones = torch.Tensor(dones)
@@ -187,14 +155,15 @@ class DDPG(object):
         pred = self.critic(states, actions)
         next_pred = self.critic_target(next_states, next_actions)
 
-        target = rewards + (1-dones) * self.gamma * next_pred.view(-1)
-        critic_loss = F.mse_loss(pred.view(-1), target)
+        target = rewards + (1 - dones) * self.gamma * next_pred
+        critic_loss = F.mse_loss(pred, target)
         critic_loss.backward()
         self.critic_optimizer.step()
 
         # actor update
         self.actor_optimizer.zero_grad()
-        actor_loss = self.critic(states, actions).mean()
+        pred_actions = self.actor(states)
+        actor_loss = self.critic(states, pred_actions).mean()
         actor_loss = -actor_loss
         actor_loss.backward()
         self.actor_optimizer.step()
@@ -220,7 +189,6 @@ def main(args):
     frame = 0
 
     for e in range(args.episode):
-        done = False
         score = 0
         step = 0
         done = False
@@ -236,9 +204,9 @@ def main(args):
             action = agent.get_action(state)
 
             next_state, reward, done, info = env.step([action])
-            next_state = np.reshape(next_state, [1,agent.obs_size])
+            next_state = np.reshape(next_state, [1, agent.obs_size])
 
-            reward = float(reward[0,0])
+            reward = float(reward[0, 0])
             # save the sample <s, a, r, s'> to the replay memory
             agent.append_sample(state, action, reward, next_state, done)
 
@@ -267,15 +235,15 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='DDPG on pytorch')
+    parser = argparse.ArgumentParser()
 
     parser.add_argument('--env', default='Pendulum-v0', type=str, help='open-ai gym environment')
     parser.add_argument('--episode', default=10000, type=int, help='the number of episode')
     parser.add_argument('--render', default=False, type=bool, help='is render')
     parser.add_argument('--memory_size', default=500000, type=int, help='replay memory size')
     parser.add_argument('--batch_size', default=64, type=int, help='minibatch size')
-    parser.add_argument('--actor_lr', default=1e-4, type=float, help='')
-    parser.add_argument('--critic_lr', default=1e-3, type=float, help='minibatch size')
+    parser.add_argument('--actor_lr', default=1e-4, type=float, help='actor learning rate')
+    parser.add_argument('--critic_lr', default=1e-3, type=float, help='critic learning rate')
     parser.add_argument('--gamma', default=0.99, type=float, help='discounted factor')
     parser.add_argument('--decay', default=1e-2, type=int, help='critic weight decay')
     parser.add_argument('--tau', default=0.001, type=float, help='moving average for target network')
