@@ -182,16 +182,15 @@ def learner(cond, memory, agent):
                 target_batch.extend(batch[1])
                 y_batch.extend(batch[2])
                 adv_batch.extend(batch[3])
-
+                
+            # train
+            agent.train_model(s_batch, target_batch, y_batch, adv_batch)
+            
             # resume running
             with cond:
                 cond.notify_all()
-            # train
-            agent.train_model(s_batch, target_batch, y_batch, adv_batch)
 
-
-
-
+                
 def main():
     num_envs = NUM_ENV
     memory = mp.Queue(maxsize=NUM_ENV)
