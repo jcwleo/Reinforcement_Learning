@@ -1,6 +1,5 @@
 import gym
 import numpy as np
-import multiprocessing as pmp
 
 import torch.nn.functional as F
 import torch.optim as optim
@@ -176,21 +175,23 @@ def learner(cond, memory, agent):
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
             while memory.qsize() != 0:
+            # if you use MacOS, use under condition.
+            # while not memory.empty():
                 batch = memory.get()
 
                 s_batch.extend(batch[0])
                 target_batch.extend(batch[1])
                 y_batch.extend(batch[2])
                 adv_batch.extend(batch[3])
-                
+
             # train
             agent.train_model(s_batch, target_batch, y_batch, adv_batch)
-            
+
             # resume running
             with cond:
                 cond.notify_all()
 
-                
+
 def main():
     num_envs = NUM_ENV
     memory = mp.Queue(maxsize=NUM_ENV)
@@ -226,7 +227,7 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 3
+    NUM_ENV = 8
     EPSILON = 1e-5
     ALPHA = 0.99
     LEARNING_RATE = 0.001
