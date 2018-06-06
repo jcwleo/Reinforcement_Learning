@@ -59,46 +59,48 @@ def check_win(game_board, win_mark):
 
 
 def render_str(gameboard, GAMEBOARD_SIZE, action_index):
-    if action_index is not None:
-        row = action_index // GAMEBOARD_SIZE
-        col = action_index % GAMEBOARD_SIZE
+    print(GAMEBOARD_SIZE)
+    gameboard = np.reshape(gameboard, [GAMEBOARD_SIZE, GAMEBOARD_SIZE])
+    row = action_index[0]
+    col = action_index[1]
     count = np.count_nonzero(gameboard)
     board_str = '\n  {}\n'.format(ALPHABET[:GAMEBOARD_SIZE * 2])
     for i in range(GAMEBOARD_SIZE):
         for j in range(GAMEBOARD_SIZE):
             if j == 0:
                 board_str += '{:2}'.format(i + 1)
-            if gameboard[i][j] == 0:
+            if gameboard[i, j] == 0:
                 if count > 0:
                     if col + 1 < GAMEBOARD_SIZE:
                         if (i, j) == (row, col + 1):
-                            board_str += '.'
+                            board_str += ' .'
                         else:
                             board_str += ' .'
                     else:
                         board_str += ' .'
                 else:
                     board_str += ' .'
-            if gameboard[i][j] == 1:
+            if gameboard[i, j] == 1:
                 if (i, j) == (row, col):
                     board_str += '(O)'
                 elif (i, j) == (row, col + 1):
                     board_str += 'O'
                 else:
                     board_str += ' O'
-            if gameboard[i][j] == -1:
+            if gameboard[i, j] == -1:
                 if (i, j) == (row, col):
                     board_str += '(X)'
                 elif (i, j) == (row, col + 1):
-                    board_str += 'X'
+                    board_str += ' X'
                 else:
                     board_str += ' X'
             if j == GAMEBOARD_SIZE - 1:
                 board_str += ' \n'
         if i == GAMEBOARD_SIZE - 1:
             board_str += '  ' + '-' * (GAMEBOARD_SIZE - 6) + \
-                '  MOVE: {:2}  '.format(count) + '-' * (GAMEBOARD_SIZE - 6)
+                         '  MOVE: {:2}  '.format(count) + '-' * (GAMEBOARD_SIZE - 6)
     print(board_str)
+
 
 def get_state_pt(id, turn, state_size, channel_size):
     state = np.zeros([channel_size, state_size, state_size], 'float')

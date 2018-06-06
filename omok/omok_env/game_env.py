@@ -8,7 +8,7 @@ class GameEnv:
     def __init__(self, board_size, win_mark):
 
         self.board_size = board_size
-        
+
         # win_mark : 5 -> omok
         # win_mark : 3 -> tictaetoe
         self.win_mark = win_mark
@@ -28,17 +28,12 @@ class GameEnv:
 
     def step(self, action):
 
-        if np.any(action) != 0:
-            action_index = np.argmax(action)
+        x_index = int(action[0])
+        y_index = int(action[1])
 
-            x_index = action_index // self.board_size
-            y_index = action_index % self.board_size
-
-        else:
-            raise ValueError("Action is none.")
-
+        # 이미 두어진 자리에 두면, 마이너스 리워드를 주고 게임 리셋
         if self.board[x_index, y_index] != 0:
-            raise ValueError("No legal action.")
+            return self.board, -1, False, self.turn
 
         # update board
         if self.turn == 0:
@@ -52,7 +47,17 @@ class GameEnv:
         # Check_win 0: playing, 1: black win, 2: white win, 3: draw
         win_index = check_win(self.board, self.win_mark)
 
-        return self.board, win_index, self.turn
+        if win_index:
+            if win_index in [1,2]:
+                reward = 1
+            else:
+                reward = 0.1
+            done = True
+        else:
+            reward = 0
+            done = False
+
+        return self.board, reward, done, self.turn
 
     @staticmethod
     def _check_win(game_board, win_mark):

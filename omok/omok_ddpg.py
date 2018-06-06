@@ -1,5 +1,4 @@
-import sys
-import gym
+from omok_env import game_env, util
 import torch
 import pylab
 import random
@@ -43,11 +42,16 @@ class Actor(nn.Module):
         self.action_range = action_range
         super(Actor, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(obs_size, 400),
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=4, stride=4),
             nn.ReLU(),
-            nn.Linear(400, 300),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=2, stride=2),
             nn.ReLU(),
-            nn.Linear(300, action_size),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=1, stride=1),
+            nn.ReLU(),
+            Flatten(),
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Linear(512, action_size),
             nn.Tanh()
         )
 
@@ -60,13 +64,18 @@ class Critic(nn.Module):
         self.action_range = action_range
         super(Critic, self).__init__()
         self.before_action = nn.Sequential(
-            nn.Linear(obs_size, 400),
-            nn.ReLU()
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=4, stride=4),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=2, stride=2),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=1, stride=1),
+            nn.ReLU(),
+            Flatten(),
         )
         self.after_action = nn.Sequential(
-            nn.Linear(400 + action_size, 300),
+            nn.Linear(256 + action_size, 512),
             nn.ReLU(),
-            nn.Linear(300, 1)
+            nn.Linear(512, 1)
         )
 
     def forward(self, x, action):
@@ -89,6 +98,7 @@ class DDPG(object):
         self.gamma = options.get('gamma')
         self.decay = options.get('decay')
         self.tau = options.get('tau')
+        self.use_ou = options.get('use_ou')
 
         # actor model
         self.actor = Actor(self.obs_size, self.action_size, self.action_range)
@@ -116,7 +126,7 @@ class DDPG(object):
     def get_action(self, state):
         state = torch.from_numpy(state).float()
         model_action = self.actor(state).detach().numpy() * self.action_range
-        action = model_action + self.ou.sample() * self.action_range
+        action = model_action + self.ou.sample() * self.action_range * self.use_ou
         return action
 
     def update_target_model(self):
@@ -170,11 +180,11 @@ class DDPG(object):
 
 
 def main(args):
-    env = gym.make(args.env)
+    env = game_env.GameEnv(args.board_size, 5)
 
-    obs_size = env.observation_space.shape[0]
-    action_size = env.action_space.shape[0]
-    action_range = env.action_space.high[0]
+    obs_size = [args.board_size, args.board_size, 1]
+    action_size = 2
+    action_range = int(args.board_size / 2)
 
     print(action_size, action_range)
 
@@ -191,22 +201,29 @@ def main(args):
     for e in range(args.episode):
         score = 0
         step = 0
+        info = 0
         done = False
         state = env.reset()
-        state = np.reshape(state, [1, agent.obs_size])
+        state = np.reshape(state, [1] + agent.obs_size).transpose([0, 3, 1, 2])
         while not done:
             step += 1
             frame += 1
-            if args.render:
-                env.render()
-
             # get action for the current state and go one step in environment
-            action = agent.get_action(state)
+            if info:
+                action = agent.get_action(state * -1)
+            else:
+                action = agent.get_action(state)
 
-            next_state, reward, done, info = env.step([action])
-            next_state = np.reshape(next_state, [1, agent.obs_size])
+            # make action
+            action = np.rint(action + agent.action_range)[0]
+            action = (np.clip(action, 0, 18))
 
-            reward = float(reward[0, 0])
+            if args.render:
+                util.render_str(state, args.board_size, action)
+
+            next_state, reward, done, info = env.step(action)
+            next_state = np.reshape(next_state, [1] + agent.obs_size).transpose([0, 3, 1, 2])
+
             # save the sample <s, a, r, s'> to the replay memory
             agent.append_sample(state, action, reward, next_state, done)
 
@@ -224,6 +241,8 @@ def main(args):
                 pylab.savefig("./save_graph/pendulum_ddpg.png")
 
             if done:
+                if args.render:
+                    util.render_str(state, args.board_size, action)
                 recent_reward.append(score)
                 # every episode, plot the play time
                 print("episode:", e, "  score:", score, "  memory length:",
@@ -239,7 +258,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--env', default='Pendulum-v0', type=str, help='open-ai gym environment')
     parser.add_argument('--episode', default=10000, type=int, help='the number of episode')
-    parser.add_argument('--render', default=False, type=bool, help='is render')
+    parser.add_argument('--render', default=True, type=bool, help='is render')
     parser.add_argument('--memory_size', default=500000, type=int, help='replay memory size')
     parser.add_argument('--batch_size', default=64, type=int, help='minibatch size')
     parser.add_argument('--actor_lr', default=1e-4, type=float, help='actor learning rate')
@@ -250,7 +269,9 @@ if __name__ == '__main__':
     parser.add_argument('--ou_theta', default=0.15, type=float, help='noise theta')
     parser.add_argument('--ou_sigma', default=0.2, type=float, help='noise sigma')
     parser.add_argument('--ou_mu', default=0.0, type=float, help='noise mu')
+    parser.add_argument('--board_size', default=19, type=int, help='board_size')
+    parser.add_argument('--use_ou', default=True, type=bool, help='use ou')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=[])
     print(vars(args))
     main(args)
