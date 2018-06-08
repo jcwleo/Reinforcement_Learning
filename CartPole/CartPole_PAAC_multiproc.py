@@ -71,17 +71,14 @@ class ActorCriticNetwork(nn.Module):
 
 
 # PAAC(Parallel Advantage Actor Critic)
-class A2CAgent(object):
+class ActorAgent(object):
     def __init__(self):
-        self.model = ActorCriticNetwork(INPUT, OUTPUT)
         self.actor = ActorCriticNetwork(INPUT, OUTPUT)
-        self.update_actor_model()
 
         self.actor.share_memory()
 
         self.output_size = OUTPUT
         self.input_size = INPUT
-        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def get_action(self, state):
         state = torch.from_numpy(state)
@@ -91,6 +88,19 @@ class A2CAgent(object):
         m = Categorical(action_p)
         action = m.sample()
         return action.item()
+
+    # after some time interval update the target model to be same with model
+    def update_actor_model(self, target):
+        self.actor.load_state_dict(target.state_dict())
+
+
+class LearnerAgent(object):
+    def __init__(self):
+        self.model = ActorCriticNetwork(INPUT, OUTPUT).cuda()
+
+        self.output_size = OUTPUT
+        self.input_size = INPUT
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def train_model(self, s_batch, target_batch, y_batch, adv_batch):
         s_batch = torch.FloatTensor(s_batch)
@@ -118,10 +128,6 @@ class A2CAgent(object):
         loss.backward()
 
         self.optimizer.step()
-
-    # after some time interval update the target model to be same with model
-    def update_actor_model(self):
-        self.actor.load_state_dict(self.model.state_dict())
 
 
 class Environment(object):
@@ -169,22 +175,22 @@ class Environment(object):
         return make_batch(sample, agent)
 
 
-def runner(env, cond, memory, agent):
+def runner(env, cond, memory, actor):
     while True:
         with cond:
-            sample = env.run(agent)
+            sample = env.run(actor)
             memory.put(sample)
 
             # wait runner
             cond.wait()
 
 
-def learner(cond, memory, agent):
+def learner(cond, memory, actor, learner_agent):
     while True:
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
-            #while memory.qsize() != 0:
-                # if you use MacOS, use under condition.
+            # while memory.qsize() != 0:
+            # if you use MacOS, use under condition.
             while not memory.empty():
                 batch = memory.get()
 
@@ -194,8 +200,8 @@ def learner(cond, memory, agent):
                 adv_batch.extend(batch[3])
 
             # train
-            agent.train_model(s_batch, target_batch, y_batch, adv_batch)
-            agent.update_actor_model()
+            learner_agent.train_model(s_batch, target_batch, y_batch, adv_batch)
+            actor.update_actor_model(learner_agent.model)
             # resume running
             with cond:
                 cond.notify_all()
@@ -207,18 +213,22 @@ def main():
     cond = mp.Condition()
 
     # make agent and share memory
-    agent = A2CAgent()
+    actor_agent = ActorAgent()
+    learner_agent = LearnerAgent()
+
+    # sync model
+    actor_agent.update_actor_model(learner_agent.model)
 
     # make envs
     envs = [Environment(gym.make('CartPole-v1'), i) for i in range(num_envs)]
 
     # Learner Process(only Learn)
-    learn_proc = mp.Process(target=learner, args=(cond, memory, agent))
+    learn_proc = mp.Process(target=learner, args=(cond, memory, learner_agent))
 
     # Runner Process(just run, not learn)
     runners = []
     for idx, env in enumerate(envs):
-        run_proc = mp.Process(target=runner, args=(env, cond, memory, agent))
+        run_proc = mp.Process(target=runner, args=(env, cond, memory, actor_agent))
         runners.append(run_proc)
         run_proc.start()
 
