@@ -74,7 +74,11 @@ class ActorCriticNetwork(nn.Module):
 class A2CAgent(object):
     def __init__(self):
         self.model = ActorCriticNetwork(INPUT, OUTPUT)
-        self.model.share_memory()
+        self.actor = ActorCriticNetwork(INPUT, OUTPUT)
+        self.update_actor_model()
+
+        self.actor.share_memory()
+
         self.output_size = OUTPUT
         self.input_size = INPUT
         self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
@@ -82,7 +86,7 @@ class A2CAgent(object):
     def get_action(self, state):
         state = torch.from_numpy(state)
         state = state.float()
-        action, v = self.model(state)
+        action, v = self.actor(state)
         action_p = F.softmax(action, dim=0)
         m = Categorical(action_p)
         action = m.sample()
@@ -115,6 +119,10 @@ class A2CAgent(object):
 
         self.optimizer.step()
 
+    # after some time interval update the target model to be same with model
+    def update_actor_model(self):
+        self.actor.load_state_dict(self.model.state_dict())
+
 
 class Environment(object):
     def __init__(self, env, idx):
@@ -133,13 +141,14 @@ class Environment(object):
         sample = []
         for _ in range(NUM_STEP):
             self.step += 1
+            # self.env.render()
             action = agent.get_action(self.obs)
             self.next_obs, reward, self.done, _ = self.env.step(action)
             self.rall += reward
 
             # negative reward
             if self.done and self.step < self.env.spec.timestep_limit:
-                reward = -1
+                reward = -100
 
             sample.append([self.obs[:], action, reward, self.next_obs[:], self.done])
 
@@ -174,9 +183,9 @@ def learner(cond, memory, agent):
     while True:
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
-            while memory.qsize() != 0:
-            # if you use MacOS, use under condition.
-            # while not memory.empty():
+            #while memory.qsize() != 0:
+                # if you use MacOS, use under condition.
+            while not memory.empty():
                 batch = memory.get()
 
                 s_batch.extend(batch[0])
@@ -186,7 +195,7 @@ def learner(cond, memory, agent):
 
             # train
             agent.train_model(s_batch, target_batch, y_batch, adv_batch)
-
+            agent.update_actor_model()
             # resume running
             with cond:
                 cond.notify_all()
@@ -227,7 +236,7 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 8
+    NUM_ENV = 4
     EPSILON = 1e-5
     ALPHA = 0.99
     LEARNING_RATE = 0.001
