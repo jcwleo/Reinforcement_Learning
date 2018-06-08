@@ -73,9 +73,9 @@ class ActorCriticNetwork(nn.Module):
 # PAAC(Parallel Advantage Actor Critic)
 class ActorAgent(object):
     def __init__(self):
-        self.actor = ActorCriticNetwork(INPUT, OUTPUT)
+        self.model = ActorCriticNetwork(INPUT, OUTPUT)
 
-        self.actor.share_memory()
+        self.model.share_memory()
 
         self.output_size = OUTPUT
         self.input_size = INPUT
@@ -83,7 +83,7 @@ class ActorAgent(object):
     def get_action(self, state):
         state = torch.from_numpy(state)
         state = state.float()
-        action, v = self.actor(state)
+        action, v = self.model(state)
         action_p = F.softmax(action, dim=0)
         m = Categorical(action_p)
         action = m.sample()
@@ -91,13 +91,13 @@ class ActorAgent(object):
 
     # after some time interval update the target model to be same with model
     def update_actor_model(self, target):
-        self.actor.load_state_dict(target.state_dict())
+        self.model.load_state_dict(target.state_dict())
 
 
 class LearnerAgent(object):
     def __init__(self):
-        self.model = ActorCriticNetwork(INPUT, OUTPUT).cuda()
-
+        self.model = ActorCriticNetwork(INPUT, OUTPUT)
+        # self.model.cuda()
         self.output_size = OUTPUT
         self.input_size = INPUT
         self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
@@ -147,7 +147,6 @@ class Environment(object):
         sample = []
         for _ in range(NUM_STEP):
             self.step += 1
-            # self.env.render()
             action = agent.get_action(self.obs)
             self.next_obs, reward, self.done, _ = self.env.step(action)
             self.rall += reward
@@ -185,7 +184,7 @@ def runner(env, cond, memory, actor):
             cond.wait()
 
 
-def learner(cond, memory, actor, learner_agent):
+def learner(cond, memory, actor_agent, learner_agent):
     while True:
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
@@ -201,7 +200,7 @@ def learner(cond, memory, actor, learner_agent):
 
             # train
             learner_agent.train_model(s_batch, target_batch, y_batch, adv_batch)
-            actor.update_actor_model(learner_agent.model)
+            actor_agent.update_actor_model(learner_agent.model)
             # resume running
             with cond:
                 cond.notify_all()
@@ -223,7 +222,7 @@ def main():
     envs = [Environment(gym.make('CartPole-v1'), i) for i in range(num_envs)]
 
     # Learner Process(only Learn)
-    learn_proc = mp.Process(target=learner, args=(cond, memory, learner_agent))
+    learn_proc = mp.Process(target=learner, args=(cond, memory, actor_agent, learner_agent))
 
     # Runner Process(just run, not learn)
     runners = []
@@ -233,13 +232,15 @@ def main():
         run_proc.start()
 
     learn_proc.start()
-    learn_proc.join()
 
     for proc in runners:
         proc.join()
 
+    learn_proc.join()
+
 
 if __name__ == '__main__':
+    torch.manual_seed(23)
     env = gym.make('CartPole-v1')
     # Hyper parameter
     INPUT = env.observation_space.shape[0]
