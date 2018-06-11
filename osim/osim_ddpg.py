@@ -2,9 +2,9 @@ import sys
 import gym
 import torch
 from osim.env import L2RunEnv
-
+import math
 import matplotlib
-matplotlib.use('TkAgg')
+
 import pylab
 import random
 import argparse
@@ -16,6 +16,38 @@ from copy import deepcopy
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
+
+# Noisy linear layer with independent Gaussian noise
+class NoisyLinear(nn.Linear):
+    def __init__(self, in_features, out_features, sigma_init=0.017, bias=True):
+        super(NoisyLinear, self).__init__(in_features, out_features, bias=True)  # TODO: Adapt for no bias
+        # µ^w and µ^b reuse self.weight and self.bias
+        self.sigma_init = sigma_init
+        self.sigma_weight = nn.Parameter(torch.Tensor(out_features, in_features))  # σ^w
+        self.sigma_bias = nn.Parameter(torch.Tensor(out_features))  # σ^b
+        self.register_buffer('epsilon_weight', torch.zeros(out_features, in_features))
+        self.register_buffer('epsilon_bias', torch.zeros(out_features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        if hasattr(self, 'sigma_weight'):  # Only init after all params added (otherwise super().__init__() fails)
+            nn.init.uniform_(self.weight, -math.sqrt(3 / self.in_features), math.sqrt(3 / self.in_features))
+            nn.init.uniform_(self.bias, -math.sqrt(3 / self.in_features), math.sqrt(3 / self.in_features))
+            nn.init.constant_(self.sigma_weight, self.sigma_init)
+            nn.init.constant_(self.sigma_bias, self.sigma_init)
+
+    def forward(self, input):
+        return F.linear(input, self.weight + self.sigma_weight * self.epsilon_weight,
+                        self.bias + self.sigma_bias * self.epsilon_bias)
+
+    def sample_noise(self):
+        self.epsilon_weight = torch.randn(self.out_features, self.in_features)
+        self.epsilon_bias = torch.randn(self.out_features)
+
+    def remove_noise(self):
+        self.epsilon_weight = torch.zeros(self.out_features, self.in_features)
+        self.epsilon_bias = torch.zeros(self.out_features)
 
 
 class OrnsteinUhlenbeckActionNoise(object):
@@ -46,13 +78,13 @@ class Actor(nn.Module):
         self.action_range = action_range
         super(Actor, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(obs_size, 400),
+            NoisyLinear(obs_size, 400),
             nn.SELU(),
-            nn.Linear(400, 400),
+            NoisyLinear(400, 400),
             nn.SELU(),
-            nn.Linear(400, 300),
+            NoisyLinear(400, 300),
             nn.SELU(),
-            nn.Linear(300, action_size),
+            NoisyLinear(300, action_size),
             nn.Sigmoid()
         )
 
@@ -65,15 +97,15 @@ class Critic(nn.Module):
         self.action_range = action_range
         super(Critic, self).__init__()
         self.before_action = nn.Sequential(
-            nn.Linear(obs_size, 400),
+            NoisyLinear(obs_size, 400),
             nn.SELU(),
         )
         self.after_action = nn.Sequential(
-            nn.Linear(400 + action_size, 400),
+            NoisyLinear(400 + action_size, 400),
             nn.SELU(),
-            nn.Linear(400, 300),
+            NoisyLinear(400, 300),
             nn.SELU(),
-            nn.Linear(300, 1)
+            NoisyLinear(300, 1)
         )
 
     def forward(self, x, action):
