@@ -4,6 +4,7 @@ import torch
 from osim.env import L2RunEnv
 import math
 import matplotlib
+matplotlib.use('TkAgg')
 
 import pylab
 import random
