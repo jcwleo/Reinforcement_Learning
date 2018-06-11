@@ -123,7 +123,7 @@ class DDPG(object):
     def get_action(self, state):
         state = torch.from_numpy(state).float()
         model_action = self.actor(state).detach().numpy()
-        action = model_action + (self.ou.sample()+1) * self.action_range
+        action = model_action + self.ou.sample() * self.action_range
         return action
 
     def update_target_model(self):
