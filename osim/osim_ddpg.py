@@ -4,6 +4,7 @@ import torch
 from osim.env import L2RunEnv
 import math
 import matplotlib
+
 matplotlib.use('TkAgg')
 
 import pylab
@@ -79,12 +80,15 @@ class Actor(nn.Module):
         self.action_range = action_range
         super(Actor, self).__init__()
         self.network = nn.Sequential(
-            NoisyLinear(obs_size, 400),
-            nn.SELU(),
+            nn.Linear(obs_size, 400),
+            nn.LayerNorm(400),
+            nn.ReLU(),
             NoisyLinear(400, 400),
-            nn.SELU(),
+            nn.LayerNorm(400),
+            nn.ReLU(),
             NoisyLinear(400, 300),
-            nn.SELU(),
+            nn.LayerNorm(300),
+            nn.ReLU(),
             NoisyLinear(300, action_size),
             nn.Sigmoid()
         )
@@ -98,14 +102,17 @@ class Critic(nn.Module):
         self.action_range = action_range
         super(Critic, self).__init__()
         self.before_action = nn.Sequential(
-            NoisyLinear(obs_size, 400),
-            nn.SELU(),
+            nn.Linear(obs_size, 400),
+            nn.LayerNorm(400),
+            nn.ReLU(),
         )
         self.after_action = nn.Sequential(
             NoisyLinear(400 + action_size, 400),
-            nn.SELU(),
+            nn.LayerNorm(400),
+            nn.ReLU(),
             NoisyLinear(400, 300),
-            nn.SELU(),
+            nn.LayerNorm(300),
+            nn.ReLU(),
             NoisyLinear(300, 1)
         )
 
@@ -156,7 +163,7 @@ class DDPG(object):
     def get_action(self, state):
         state = torch.from_numpy(state).float()
         model_action = self.actor(state).detach().numpy()
-        action = model_action + self.ou.sample() * self.action_range
+        action = model_action  # + self.ou.sample() * self.action_range
         return action
 
     def update_target_model(self):
