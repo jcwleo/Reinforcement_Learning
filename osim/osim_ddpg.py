@@ -79,47 +79,42 @@ class Actor(nn.Module):
     def __init__(self, obs_size, action_size, action_range):
         self.action_range = action_range
         super(Actor, self).__init__()
-        self.network = nn.Sequential(
-            nn.Linear(obs_size, 400),
-            nn.LayerNorm(400),
-            nn.ReLU(),
-            NoisyLinear(400, 400),
-            nn.LayerNorm(400),
-            nn.ReLU(),
-            NoisyLinear(400, 300),
-            nn.LayerNorm(300),
-            nn.ReLU(),
-            NoisyLinear(300, action_size),
-            nn.Sigmoid()
-        )
+
+        self.relu = nn.LeakyReLU()
+        self.l1 = nn.Linear(obs_size, 400)
+        self.l2 = NoisyLinear(400, 400)
+        self.l3 = NoisyLinear(400, 400)
+        self.l4 = NoisyLinear(400, action_size)
+
+        self.layers = [self.l2, self.l3, self.l4]
 
     def forward(self, x):
-        return self.network(x)
+        x = self.relu(F.layer_norm(self.l1(x), [400]))
+        x = self.relu(F.layer_norm(self.l2(x), [400]))
+        x = self.relu(F.layer_norm(self.l3(x), [400]))
+        x = F.sigmoid(self.l4(x))
+        return x
 
 
 class Critic(nn.Module):
     def __init__(self, obs_size, action_size, action_range):
         self.action_range = action_range
         super(Critic, self).__init__()
-        self.before_action = nn.Sequential(
-            nn.Linear(obs_size, 400),
-            nn.LayerNorm(400),
-            nn.ReLU(),
-        )
-        self.after_action = nn.Sequential(
-            NoisyLinear(400 + action_size, 400),
-            nn.LayerNorm(400),
-            nn.ReLU(),
-            NoisyLinear(400, 300),
-            nn.LayerNorm(300),
-            nn.ReLU(),
-            NoisyLinear(300, 1)
-        )
+
+        self.relu = nn.LeakyReLU()
+        self.l1 = nn.Linear(obs_size, 400)
+        self.l2 = NoisyLinear(400 + action_size, 400)
+        self.l3 = NoisyLinear(400, 400)
+        self.l4 = NoisyLinear(400, 1)
+
+        self.layers = [self.l2, self.l3, self.l4]
 
     def forward(self, x, action):
-        x = self.before_action(x)
+        x = self.relu(F.layer_norm(self.l1(x), [400]))
         x = torch.cat([x, action], dim=1)
-        x = self.after_action(x)
+        x = self.relu(F.layer_norm(self.l2(x), [400]))
+        x = self.relu(F.layer_norm(self.l3(x), [400]))
+        x = self.l4(x)
         return x
 
 
@@ -234,7 +229,7 @@ def main(args):
     agent = DDPG(args_dict)
     recent_reward = deque(maxlen=100)
     frame = 0
-
+    repeat = 0
     for e in range(args.episode):
         score = 0
         step = 0
@@ -247,19 +242,33 @@ def main(args):
             if args.render:
                 env.render()
 
+            for layer in agent.actor.layers:
+                layer.sample_noise()
+
+            for layer in agent.critic.layers:
+                layer.sample_noise()
+
             # get action for the current state and go one step in environment
             action = agent.get_action(state)
-            for _ in range(3):
+            if repeat:
+                for _ in range(repeat):
+                    next_state, reward, done, info = env.step(action[0])
+                    if done:
+                        break
+            else:
                 next_state, reward, done, info = env.step(action[0])
-                if done:
-                    break
+
+            score += reward
+
+            if done and step < 1000:
+                reward = -10
+
             next_state = np.reshape(next_state, [1, agent.obs_size])
 
             # reward = float(reward[0, 0])
             # save the sample <s, a, r, s'> to the replay memory
             agent.append_sample(state, action, reward, next_state, done)
 
-            score += reward
             state = next_state
             if frame > agent.batch_size:
                 agent.train()
