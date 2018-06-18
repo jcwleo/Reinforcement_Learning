@@ -65,28 +65,41 @@ class ActorCriticNetwork(nn.Module):
 
     def forward(self, state):
         x = self.feature(state)
-        policy = self.actor(x)
+        policy = F.softmax(self.actor(x))
         value = self.critic(x)
         return policy, value
 
 
 # PAAC(Parallel Advantage Actor Critic)
-class A2CAgent(object):
+class ActorAgent(object):
     def __init__(self):
         self.model = ActorCriticNetwork(INPUT, OUTPUT)
+
         self.model.share_memory()
+
         self.output_size = OUTPUT
         self.input_size = INPUT
-        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def get_action(self, state):
         state = torch.from_numpy(state)
         state = state.float()
-        action, v = self.model(state)
-        action_p = F.softmax(action, dim=0)
-        m = Categorical(action_p)
+        policy, value = self.model(state)
+        m = Categorical(policy)
         action = m.sample()
         return action.item()
+
+    # after some time interval update the target model to be same with model
+    def update_actor_model(self, target):
+        self.model.load_state_dict(target.state_dict())
+
+
+class LearnerAgent(object):
+    def __init__(self):
+        self.model = ActorCriticNetwork(INPUT, OUTPUT)
+        # self.model.cuda()
+        self.output_size = OUTPUT
+        self.input_size = INPUT
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LEARNING_RATE)
 
     def train_model(self, s_batch, target_batch, y_batch, adv_batch):
         s_batch = torch.FloatTensor(s_batch)
@@ -95,18 +108,19 @@ class A2CAgent(object):
         adv_batch = torch.FloatTensor(adv_batch)
 
         # for multiply advantage
-        ce = nn.CrossEntropyLoss(reduce=False)
+        policy, value = self.model(s_batch)
+        m = Categorical(policy)
+
         # mse = nn.SmoothL1Loss()
         mse = nn.MSELoss()
 
         # Actor loss
-        actor_loss = ce(self.model(s_batch)[0], y_batch) * adv_batch.sum(1)
+        actor_loss = -m.log_prob(y_batch) * adv_batch.sum(1)
 
         # Entropy(for more exploration)
-        entropy = -(F.log_softmax(self.model(s_batch)[0], dim=1) * F.softmax(self.model(s_batch)[0], dim=1)).sum(1,
-                                                                                                                 keepdim=True)
+        entropy = m.entropy()
         # Critic loss
-        critic_loss = mse(self.model(s_batch)[1], target_batch)
+        critic_loss = mse(value, target_batch)
 
         # Total loss
         loss = actor_loss.mean() + 0.5 * critic_loss - 0.01 * entropy.mean()
@@ -139,7 +153,7 @@ class Environment(object):
 
             # negative reward
             if self.done and self.step < self.env.spec.timestep_limit:
-                reward = -1
+                reward = -100
 
             sample.append([self.obs[:], action, reward, self.next_obs[:], self.done])
 
@@ -160,23 +174,23 @@ class Environment(object):
         return make_batch(sample, agent)
 
 
-def runner(env, cond, memory, agent):
+def runner(env, cond, memory, actor):
     while True:
         with cond:
-            sample = env.run(agent)
+            sample = env.run(actor)
             memory.put(sample)
 
             # wait runner
             cond.wait()
 
 
-def learner(cond, memory, agent):
+def learner(cond, memory, actor_agent, learner_agent):
     while True:
         if memory.full():
             s_batch, target_batch, y_batch, adv_batch = [], [], [], []
-            while memory.qsize() != 0:
+            # while memory.qsize() != 0:
             # if you use MacOS, use under condition.
-            # while not memory.empty():
+            while not memory.empty():
                 batch = memory.get()
 
                 s_batch.extend(batch[0])
@@ -185,8 +199,8 @@ def learner(cond, memory, agent):
                 adv_batch.extend(batch[3])
 
             # train
-            agent.train_model(s_batch, target_batch, y_batch, adv_batch)
-
+            learner_agent.train_model(s_batch, target_batch, y_batch, adv_batch)
+            actor_agent.update_actor_model(learner_agent.model)
             # resume running
             with cond:
                 cond.notify_all()
@@ -198,29 +212,35 @@ def main():
     cond = mp.Condition()
 
     # make agent and share memory
-    agent = A2CAgent()
+    actor_agent = ActorAgent()
+    learner_agent = LearnerAgent()
+
+    # sync model
+    actor_agent.update_actor_model(learner_agent.model)
 
     # make envs
     envs = [Environment(gym.make('CartPole-v1'), i) for i in range(num_envs)]
 
     # Learner Process(only Learn)
-    learn_proc = mp.Process(target=learner, args=(cond, memory, agent))
+    learn_proc = mp.Process(target=learner, args=(cond, memory, actor_agent, learner_agent))
 
     # Runner Process(just run, not learn)
     runners = []
     for idx, env in enumerate(envs):
-        run_proc = mp.Process(target=runner, args=(env, cond, memory, agent))
+        run_proc = mp.Process(target=runner, args=(env, cond, memory, actor_agent))
         runners.append(run_proc)
         run_proc.start()
 
     learn_proc.start()
-    learn_proc.join()
 
     for proc in runners:
         proc.join()
 
+    learn_proc.join()
+
 
 if __name__ == '__main__':
+    torch.manual_seed(23)
     env = gym.make('CartPole-v1')
     # Hyper parameter
     INPUT = env.observation_space.shape[0]
