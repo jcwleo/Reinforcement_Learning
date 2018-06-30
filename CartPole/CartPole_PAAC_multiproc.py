@@ -21,7 +21,7 @@ def make_batch(sample, agent):
     s1 = np.reshape(np.stack(sample[:, 3]), [NUM_STEP, agent.input_size])
     y = sample[:, 1]
     r = np.reshape(np.stack(sample[:, 2]), [NUM_STEP, 1])
-    d = np.reshape(np.stack(sample[:, 4]), [NUM_STEP, 1])
+    d = np.reshape(np.stack(sample[:, 4]), [NUM_STEP, 1]).astype(int)
 
     state = torch.from_numpy(s)
     state = state.float()
@@ -35,7 +35,7 @@ def make_batch(sample, agent):
     next_value = next_value.data.numpy()
 
     # Discounted Return
-    running_add = next_value[NUM_STEP - 1, 0] * d[NUM_STEP - 1, 0]
+    running_add = next_value[NUM_STEP - 1, 0] * (1 - d[NUM_STEP - 1, 0])
     for t in range(NUM_STEP - 1, -1, -1):
         if d[t]:
             running_add = 0
