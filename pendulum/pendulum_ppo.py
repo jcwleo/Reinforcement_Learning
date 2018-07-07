@@ -38,7 +38,7 @@ def make_batch(sample, agent):
     # Discounted Return
     running_add = next_value[NUM_STEP - 1, 0]
     for t in range(NUM_STEP - 1, -1, -1):
-        running_add = r[t] + DISCOUNT * running_add * (1 - d[t])
+        running_add = r[t] + DISCOUNT * LAM * running_add * (1 - d[t])
         discounted_return[t, 0] = running_add
 
     # For critic
@@ -55,13 +55,13 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, input_size, output_size):
         super(ActorCriticNetwork, self).__init__()
         self.feature = nn.Sequential(
-            nn.Linear(input_size, 64),
+            nn.Linear(input_size, 128),
             nn.ReLU(),
-            nn.Linear(64, 64),
+            nn.Linear(128, 128),
             nn.ReLU()
         )
-        self.actor = nn.Linear(64, output_size)
-        self.critic = nn.Linear(64, 1)
+        self.actor = nn.Linear(128, output_size)
+        self.critic = nn.Linear(128, 1)
 
     def forward(self, state):
         x = self.feature(state)
@@ -260,11 +260,11 @@ def main():
 
 if __name__ == '__main__':
     torch.manual_seed(23)
-    ENV_ID = 'CartPole-v0'
+    ENV_ID = 'Pendulum-v1'
     env = gym.make(ENV_ID)
     # Hyper parameter
     INPUT = env.observation_space.shape[0]
-    OUTPUT = env.action_space.n
+    OUTPUT = env.action_space.n[0]
     DISCOUNT = 0.99
     NUM_STEP = 2048
     NUM_ENV = 1
