@@ -286,7 +286,7 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 6
+    NUM_ENV = 4
     EPSILON = 1e-5
     ALPHA = 0.99
     LEARNING_RATE = 0.001
