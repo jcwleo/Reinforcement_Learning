@@ -51,3 +51,6 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 ## 9. C51(Distributional RL)
 * DDQN
 	* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_C51.py)
+	
+## 10. PPO(Proximal Policy Optimization)
+* [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/cartpole_ppo.py)
