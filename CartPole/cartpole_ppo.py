@@ -36,10 +36,11 @@ def make_batch(sample, agent):
     next_value = next_value.data.numpy()
 
     # Discounted Return
-    running_add = next_value[NUM_STEP - 1, 0]
+    gae = 0
     for t in range(NUM_STEP - 1, -1, -1):
-        running_add = r[t] + DISCOUNT * running_add * (1 - d[t])
-        discounted_return[t, 0] = running_add
+        delta = r[t] + DISCOUNT * next_value[t] * (1 - d[t]) - value[t]
+        gae = delta + DISCOUNT * LAM * (1 - d[t]) * gae
+        discounted_return[t, 0] = gae + value[t]
 
     # For critic
     target = r + DISCOUNT * (1 - d) * next_value
@@ -266,15 +267,15 @@ if __name__ == '__main__':
     INPUT = env.observation_space.shape[0]
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
-    NUM_STEP = 2048
-    NUM_ENV = 1
+    NUM_STEP = 128
+    NUM_ENV = 4
     LAM = 0.95
     EPOCH = 5
-    BATCH_SIZE = 256
+    BATCH_SIZE = 32
     V_COEF = 1.0
     EPSILON = 0.2
     ALPHA = 0.99
-    LEARNING_RATE = 0.0007 * NUM_ENV
+    LEARNING_RATE = 0.0007
     env.close()
 
     main()

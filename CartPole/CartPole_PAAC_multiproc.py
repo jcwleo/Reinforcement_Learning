@@ -65,7 +65,7 @@ class ActorCriticNetwork(nn.Module):
 
     def forward(self, state):
         x = self.feature(state)
-        policy = F.softmax(self.actor(x))
+        policy = F.softmax(self.actor(x), dim=-1)
         value = self.critic(x)
         return policy, value
 
@@ -247,10 +247,10 @@ if __name__ == '__main__':
     OUTPUT = env.action_space.n
     DISCOUNT = 0.99
     NUM_STEP = 5
-    NUM_ENV = 4
+    NUM_ENV = 1
     EPSILON = 1e-5
     ALPHA = 0.99
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0007
     env.close()
 
     main()

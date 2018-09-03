@@ -12,6 +12,7 @@ import torch
 from collections import deque
 
 from torch.distributions.categorical import Categorical
+from torch.distributions.normal import Normal
 
 
 def make_batch(sample, agent):
@@ -26,20 +27,21 @@ def make_batch(sample, agent):
     with torch.no_grad():
         state = torch.from_numpy(s)
         state = state.float()
-        _, value = agent.model_old(state)
+        _, _, _, value = agent.model_old(state)
 
         next_state = torch.from_numpy(s1)
         next_state = next_state.float()
-        _, next_value = agent.model_old(next_state)
+        _, _, _, next_value = agent.model_old(next_state)
 
     value = value.data.numpy()
     next_value = next_value.data.numpy()
 
     # Discounted Return
-    running_add = next_value[NUM_STEP - 1, 0]
+    gae = 0
     for t in range(NUM_STEP - 1, -1, -1):
-        running_add = r[t] + DISCOUNT * LAM * running_add * (1 - d[t])
-        discounted_return[t, 0] = running_add
+        delta = r[t] + DISCOUNT * next_value[t] * (1 - d[t]) - value[t]
+        gae = delta + DISCOUNT * LAM * (1 - d[t]) * gae
+        discounted_return[t, 0] = gae + value[t]
 
     # For critic
     target = r + DISCOUNT * (1 - d) * next_value
@@ -55,19 +57,25 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, input_size, output_size):
         super(ActorCriticNetwork, self).__init__()
         self.feature = nn.Sequential(
-            nn.Linear(input_size, 128),
-            nn.ReLU(),
-            nn.Linear(128, 128),
-            nn.ReLU()
+            nn.Linear(input_size, 256),
+            nn.Tanh(),
+            nn.Linear(256, 256),
+            nn.Tanh()
         )
-        self.actor = nn.Linear(128, output_size)
-        self.critic = nn.Linear(128, 1)
+        self.mu = nn.Linear(256, output_size)
+        self.critic = nn.Linear(256, 1)
+        self.mu.weight.data.mul_(0.1)
+        self.mu.bias.data.mul_(0.0)
+        self.critic.weight.data.mul_(0.1)
+        self.critic.bias.data.mul_(0.0)
 
     def forward(self, state):
         x = self.feature(state)
-        policy = F.softmax(self.actor(x), dim=-1)
+        mu = self.mu(x)
+        logstd = torch.zeros_like(mu)
+        std = torch.exp(logstd)
         value = self.critic(x)
-        return policy, value
+        return mu, std, logstd, value
 
 
 # PAAC(Parallel Advantage Actor Critic)
@@ -80,10 +88,10 @@ class ActorAgent(object):
         self.input_size = INPUT
 
     def get_action(self, state):
-        state = torch.from_numpy(state)
+        state = torch.from_numpy(state).unsqueeze(0)
         state = state.float()
-        policy, value = self.model_old(state)
-        m = Categorical(policy)
+        mu, std, logstd, value = self.model_old(state)
+        m = Normal(loc=mu,scale=std)
         action = m.sample()
         return action.item()
 
@@ -115,14 +123,14 @@ class LearnerAgent(object):
         target_batch = torch.FloatTensor(target_batch)
         adv_batch = torch.FloatTensor(adv_batch)
         with torch.no_grad():
-            policy_old, value_old = actor_agent.model_old(s_batch)
-            m_old = Categorical(policy_old)
-            y_batch_old = torch.LongTensor(y_batch)
+            mu_old, std_old, logstd_old, value_old = actor_agent.model_old(s_batch)
+            m_old = Normal(loc=mu_old, scale=std_old)
+            y_batch_old = torch.FloatTensor(y_batch)
             log_prob_old = m_old.log_prob(y_batch_old)
 
         # for multiply advantage
-        policy, value = self.model(s_batch)
-        m = Categorical(policy)
+        mu, std, logstd, value = self.model(s_batch)
+        m = Normal(loc=mu, scale=std)
         y_batch = m.sample()
         log_prob = m.log_prob(y_batch)
         entropy = m.entropy().mean()
@@ -131,14 +139,14 @@ class LearnerAgent(object):
             minibatch = random.sample(range(len(s_batch)), BATCH_SIZE)
             ratio = torch.exp(log_prob[minibatch] - log_prob_old[minibatch])
 
-            surr1 = ratio * adv_batch[minibatch].sum(1)
-            surr2 = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON) * adv_batch[minibatch].sum(1)
+            surr1 = ratio * adv_batch[minibatch,0].sum(0)
+            surr2 = torch.clamp(ratio, 1.0 - EPSILON, 1.0 + EPSILON) * adv_batch[minibatch,0].sum(0)
 
             actor_loss = -torch.min(surr1, surr2).mean()
             critic_loss = F.mse_loss(value_old[minibatch], target_batch[minibatch])
 
             self.optimizer.zero_grad()
-            loss = actor_loss + V_COEF * critic_loss - 0.01 * entropy
+            loss = actor_loss + V_COEF * critic_loss - 0.0 * entropy
             loss.backward(retain_graph=True)
             self.optimizer.step()
 
@@ -161,12 +169,12 @@ class Environment(object):
         for _ in range(NUM_STEP):
             self.step += 1
             action = agent.get_action(self.obs)
-            self.next_obs, reward, self.done, _ = self.env.step(action)
+            self.next_obs, reward, self.done, _ = self.env.step([action])
             self.rall += reward
 
-            # negative reward
-            if self.done and self.step < self.env.spec.timestep_limit:
-                reward = 0
+            # # negative reward
+            # if self.done and self.step < self.env.spec.timestep_limit:
+            #     reward = 0
 
             sample.append([self.obs[:], action, reward, self.next_obs[:], self.done])
 
@@ -260,21 +268,21 @@ def main():
 
 if __name__ == '__main__':
     torch.manual_seed(23)
-    ENV_ID = 'Pendulum-v1'
+    ENV_ID = 'Pendulum-v0'
     env = gym.make(ENV_ID)
     # Hyper parameter
     INPUT = env.observation_space.shape[0]
-    OUTPUT = env.action_space.n[0]
+    OUTPUT = env.action_space.shape[0]
     DISCOUNT = 0.99
     NUM_STEP = 2048
     NUM_ENV = 1
     LAM = 0.95
-    EPOCH = 5
-    BATCH_SIZE = 256
+    EPOCH = 10
+    BATCH_SIZE = 64
     V_COEF = 1.0
     EPSILON = 0.2
     ALPHA = 0.99
-    LEARNING_RATE = 0.0007 * NUM_ENV
+    LEARNING_RATE = 0.0003
     env.close()
 
     main()
