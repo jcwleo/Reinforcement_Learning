@@ -1,5 +1,6 @@
 # Reinforcement Learning
 ###### 여러 환경에 적용해보는 강화학습 예제(파이토치로 옮기고 있습니다)
+[Here is my new Repo for PG](https://github.com/jcwleo/mario_rl)
 
 ![Alt text](/readme/Play.gif)
 ###### [Breakout / Use DQN(Nature2015)]
@@ -47,6 +48,7 @@ DQN(Nature2015)은 (Experience Replay Memory / Target Network / CNN) 을 사용
 ## 8. Parallel Advantage Actor Critic(is called 'A2C' in OpenAI)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PAAC.py)(used a single thread instead of multi thread)
 * [CartPole(Classic Control)](https://github.com/jcwleo/Reinforcement_Learning/blob/master/CartPole/CartPole_PAAC_multiproc.py)(used multiprocessing in pytorch)
+* [Super Mario Bros](https://github.com/jcwleo/mario_rl)(used multiprocessing in pytorch)
 
 ## 9. C51(Distributional RL)
 * DDQN
