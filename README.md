@@ -1,6 +1,7 @@
 # Reinforcement Learning
 ###### 여러 환경에 적용해보는 강화학습 예제(파이토치로 옮기고 있습니다)
-[Here is my new Repo for PG](https://github.com/jcwleo/mario_rl)
+# [Here is my new Repo for PG!!](https://github.com/jcwleo/mario_rl)
+-------------------
 
 ![Alt text](/readme/Play.gif)
 ###### [Breakout / Use DQN(Nature2015)]
